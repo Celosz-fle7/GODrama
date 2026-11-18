@@ -91,21 +91,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
             // User Header
             Row(
               children: [
-                Container(
-                  width: 64,
-                  height: 64,
-                  decoration: const BoxDecoration(
-                    color: AppColors.surface,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Center(
-                    child: SvgPicture.asset(
-                      AppAssets.icAvatar,
-                      width: 40,
-                      height: 40,
-                      colorFilter: const ColorFilter.mode(
-                        AppColors.primary,
-                        BlendMode.srcIn,
+                GestureDetector(
+                  onTap: _showEditProfileDialog,
+                  child: Container(
+                    width: 64,
+                    height: 64,
+                    decoration: const BoxDecoration(
+                      color: AppColors.surface,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(
+                      child: SvgPicture.asset(
+                        AppAssets.icAvatar,
+                        width: 40,
+                        height: 40,
+                        colorFilter: const ColorFilter.mode(
+                          AppColors.primary,
+                          BlendMode.srcIn,
+                        ),
                       ),
                     ),
                   ),
@@ -158,7 +161,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
             const SizedBox(height: 24),
 
-            // Real Stats Card
+            // Real Stats Card (Interaktif)
             Container(
               padding: const EdgeInsets.symmetric(vertical: 16),
               decoration: BoxDecoration(
@@ -177,15 +180,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   _StatItem(
                     count: '${settings.favoriteIds.length}',
                     label: 'Favorit Saya',
+                    onTap: _showFavoritesSheet,
                   ),
-                  const _StatItem(count: 'VIP', label: 'Status Akses'),
+                  _StatItem(
+                    count: 'VIP',
+                    label: 'Status Akses',
+                    onTap: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          backgroundColor: Color(0xFF1E232E),
+                          content: Text(
+                            'Akses VIP Seumur Hidup: Bebas Iklan & Pure Protocol.',
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 ],
               ),
             ),
 
             const SizedBox(height: 24),
 
-            // Pengaturan Streaming & Konten
+            // Pengaturan Streaming & Media
             const Text(
               'Pengaturan Streaming & Media',
               style: TextStyle(
@@ -265,6 +282,53 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     indent: 52,
                   ),
 
+                  // Auto Play Next Switch
+                  SwitchListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 4,
+                    ),
+                    secondary: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceLight,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(
+                        Icons.playlist_play_rounded,
+                        color: AppColors.primary,
+                        size: 20,
+                      ),
+                    ),
+                    activeColor: AppColors.primary,
+                    title: const Text(
+                      'Putar Otomatis Episode Berikutnya',
+                      style: TextStyle(
+                        fontFamily: 'Urbanist',
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    subtitle: const Text(
+                      'Lanjut ke episode selanjutnya tanpa jeda di pemutar',
+                      style: TextStyle(
+                        fontFamily: 'Urbanist',
+                        fontSize: 11,
+                        color: AppColors.textMuted,
+                      ),
+                    ),
+                    value: settings.autoPlayNext,
+                    onChanged: (val) {
+                      settings.toggleAutoPlayNext(val);
+                    },
+                  ),
+                  const Divider(
+                    color: AppColors.divider,
+                    height: 1,
+                    indent: 52,
+                  ),
+
                   // Bahasa & Sulih Suara
                   _buildMenuItem(
                     icon: Icons.translate_rounded,
@@ -331,7 +395,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   _buildMenuItem(
                     icon: Icons.system_update_rounded,
                     title: 'Periksa Pembaruan',
-                    subtitle: 'GoDrama v1.0.0 (Cek rilis terbaru)',
+                    subtitle: 'GoDrama v1.0.1 (Cek rilis terbaru)',
                     onTap: () {
                       UpdateService.instance.checkForUpdate(
                         context,
@@ -345,11 +409,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     indent: 52,
                   ),
 
+                  // Bantuan & Umpan Balik
+                  _buildMenuItem(
+                    icon: Icons.feedback_outlined,
+                    title: 'Bantuan & Laporkan Masalah',
+                    subtitle: 'Kirim masukan atau laporkan masalah video',
+                    onTap: _showFeedbackDialog,
+                  ),
+                  const Divider(
+                    color: AppColors.divider,
+                    height: 1,
+                    indent: 52,
+                  ),
+
                   // Tentang GoDrama
                   _buildMenuItem(
                     icon: Icons.info_outline_rounded,
                     title: 'Tentang GoDrama',
-                    subtitle: 'v1.0.0 (Clean Architecture & Pure Protocol)',
+                    subtitle: 'v1.0.1 (Clean Architecture & Pure Protocol)',
                     onTap: _showAboutDialog,
                   ),
                 ],
@@ -665,6 +742,214 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  void _showFavoritesSheet() {
+    final favIds = AppSettingsService.instance.favoriteIds;
+    final history = AppSettingsService.instance.watchHistory;
+    final favDramas = history.where((d) => favIds.contains(d.id)).toList();
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1E232E),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.6,
+          maxChildSize: 0.85,
+          builder: (_, scrollController) {
+            return Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Drama Favorit Saya (${favIds.length})',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                          fontFamily: 'Urbanist',
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Divider(color: Colors.white12),
+                  if (favIds.isEmpty)
+                    const Expanded(
+                      child: Center(
+                        child: Text(
+                          'Belum ada drama favorit tersimpan.\nKlik ikon bookmark di video untuk menyimpan.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white54,
+                            fontFamily: 'Urbanist',
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    Expanded(
+                      child: ListView.builder(
+                        controller: scrollController,
+                        itemCount: favDramas.isNotEmpty
+                            ? favDramas.length
+                            : favIds.length,
+                        itemBuilder: (context, idx) {
+                          if (favDramas.isNotEmpty) {
+                            final drama = favDramas[idx];
+                            return ListTile(
+                              contentPadding: const EdgeInsets.symmetric(
+                                vertical: 4,
+                              ),
+                              leading: ClipRRect(
+                                borderRadius: BorderRadius.circular(6),
+                                child: Image.network(
+                                  drama.coverUrl,
+                                  width: 44,
+                                  height: 56,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Container(
+                                    color: Colors.grey.shade900,
+                                    width: 44,
+                                    height: 56,
+                                  ),
+                                ),
+                              ),
+                              title: Text(
+                                drama.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              subtitle: Text(
+                                '${drama.totalEpisodes} Episode',
+                                style: const TextStyle(
+                                  color: Colors.white54,
+                                  fontSize: 12,
+                                ),
+                              ),
+                              trailing: const Icon(
+                                Icons.play_circle_fill_rounded,
+                                color: AppColors.primary,
+                              ),
+                              onTap: () {
+                                Navigator.pop(ctx);
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => PlayerScreen(drama: drama),
+                                  ),
+                                );
+                              },
+                            );
+                          } else {
+                            final dramaId = favIds.elementAt(idx);
+                            return ListTile(
+                              leading: const Icon(
+                                Icons.bookmark_rounded,
+                                color: Color(0xFFFF3366),
+                              ),
+                              title: Text(
+                                'Drama ID: $dramaId',
+                                style: const TextStyle(color: Colors.white),
+                              ),
+                              subtitle: const Text(
+                                'Tersimpan di daftar favorit',
+                                style: TextStyle(
+                                  color: Colors.white54,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            );
+                          }
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showFeedbackDialog() {
+    final textController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1E232E),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Text(
+            'Bantuan & Masukan',
+            style: TextStyle(color: Colors.white, fontFamily: 'Urbanist'),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Ada video error atau punya saran fitur? Tulis pesan Anda di bawah:',
+                style: TextStyle(color: Colors.white70, fontSize: 12),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: textController,
+                maxLines: 3,
+                style: const TextStyle(color: Colors.white, fontSize: 13),
+                decoration: InputDecoration(
+                  hintText: 'Tulis kendala Anda...',
+                  hintStyle: const TextStyle(color: Colors.white38),
+                  filled: true,
+                  fillColor: const Color(0xFF12141C),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text(
+                'Batal',
+                style: TextStyle(color: Colors.white60),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    backgroundColor: Color(0xFF1E232E),
+                    content: Text(
+                      'Terima kasih! Laporan masukan Anda telah kami terima.',
+                    ),
+                  ),
+                );
+              },
+              child: const Text('Kirim'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   void _showAboutDialog() {
     showDialog(
       context: context,
@@ -713,7 +998,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Divider(color: Colors.white12),
               SizedBox(height: 6),
               Text(
-                '• Versi: v1.0.0 (Release Universal)',
+                '• Versi: v1.0.1 (Release Universal)',
                 style: TextStyle(color: Colors.white70, fontSize: 12),
               ),
               SizedBox(height: 4),

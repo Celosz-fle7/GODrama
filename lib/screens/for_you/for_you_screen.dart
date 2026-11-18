@@ -56,7 +56,7 @@ class _ForYouScreenState extends State<ForYouScreen> {
               CircularProgressIndicator(color: AppColors.primary),
               SizedBox(height: 14),
               Text(
-                'Memuat Tangga ShortTV Indonesia...',
+                'Memuat Cuplikan Drama Indonesia...',
                 style: TextStyle(
                   fontFamily: 'Urbanist',
                   fontSize: 13,
@@ -83,7 +83,7 @@ class _ForYouScreenState extends State<ForYouScreen> {
               ),
               const SizedBox(height: 12),
               const Text(
-                'Gagal memuat feed video',
+                'Gagal memuat feed cuplikan',
                 style: TextStyle(color: Colors.white, fontFamily: 'Urbanist'),
               ),
               const SizedBox(height: 16),
@@ -133,19 +133,20 @@ class _ReelItem extends StatefulWidget {
 
 class _ReelItemState extends State<_ReelItem> {
   VideoPlayerController? _videoController;
-  int _currentEpisode = 0;
   bool _isPlaying = true;
   List<EpisodeModel> _episodes = [];
   bool _isLoadingEpisodes = false;
 
-  // 3 Menu Kontrol Unggulan (Kualitas, Subtitle, Speed / Lainnya)
+  // Menu Pengaturan Cuplikan (diakses via Titik 3)
   String _selectedQuality = '1080p';
   bool _subtitleEnabled = true;
   String _subtitleLanguage = 'Bahasa Indonesia';
   double _playbackSpeed = 1.0;
+  bool _clearViewMode = false;
+
+  // Scrubber State
   bool _isDraggingScrubber = false;
   double _scrubberValue = 0.0;
-
   Timer? _positionTimer;
 
   @override
@@ -155,7 +156,7 @@ class _ReelItemState extends State<_ReelItem> {
     _subtitleEnabled = AppSettingsService.instance.subtitlesEnabled;
     _episodes = widget.drama.episodes;
     if (widget.isActive) {
-      _initVideo();
+      _initTeaserVideo();
     }
   }
 
@@ -163,13 +164,14 @@ class _ReelItemState extends State<_ReelItem> {
   void didUpdateWidget(covariant _ReelItem oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.isActive && !oldWidget.isActive) {
-      _initVideo();
+      _initTeaserVideo();
     } else if (!widget.isActive && oldWidget.isActive) {
       _disposeVideo();
     }
   }
 
-  Future<void> _initVideo() async {
+  /// Memutar cuplikan (Episode 1) secara looping sebagai teaser
+  Future<void> _initTeaserVideo() async {
     if (_episodes.isEmpty && !_isLoadingEpisodes) {
       _isLoadingEpisodes = true;
       final liveEps = await ShortTvService.instance.fetchShortTvEpisodes(
@@ -184,13 +186,10 @@ class _ReelItemState extends State<_ReelItem> {
     }
 
     if (_episodes.isEmpty) return;
-    final ep = _episodes[_currentEpisode.clamp(0, _episodes.length - 1)];
+    // Cuplikan For You selalu memainkan Episode 1 (Teaser)
+    final teaserEp = _episodes.first;
 
-    // Catat ke watch history di AppSettingsService
-    AppSettingsService.instance.addToWatchHistory(widget.drama);
-
-    // Dapatkan url berdasarkan kualitas yang dipilih
-    final streamUrl = ep.getUrlForQuality(_selectedQuality);
+    final streamUrl = teaserEp.getUrlForQuality(_selectedQuality);
     final proxiedUrl = SmartStreamProxy.instance.getProxyUrl(streamUrl);
 
     _disposeVideo();
@@ -199,20 +198,13 @@ class _ReelItemState extends State<_ReelItem> {
       ..initialize().then((_) {
         if (mounted) {
           _videoController?.setPlaybackSpeed(_playbackSpeed);
-          _videoController?.setLooping(true);
+          _videoController?.setLooping(true); // Looping cuplikan saja
           _videoController?.play();
           setState(() {
             _isPlaying = true;
           });
 
-          // Mulai timer untuk progress scrubber
           _startProgressTracker();
-
-          // Smart Preload episode berikutnya di background
-          if (_currentEpisode + 1 < _episodes.length) {
-            final nextEp = _episodes[_currentEpisode + 1];
-            SmartStreamProxy.instance.preloadNextEpisode(nextEp.videoUrl);
-          }
         }
       });
   }
@@ -244,6 +236,10 @@ class _ReelItemState extends State<_ReelItem> {
   }
 
   void _togglePlayPause() {
+    if (_clearViewMode) {
+      setState(() => _clearViewMode = false);
+      return;
+    }
     if (_videoController == null) return;
     setState(() {
       if (_videoController!.value.isPlaying) {
@@ -256,7 +252,6 @@ class _ReelItemState extends State<_ReelItem> {
     });
   }
 
-  // Ganti Kualitas Video on the fly tanpa reset detik video
   void _changeQuality(String quality) {
     if (_selectedQuality == quality || _videoController == null) return;
     final currentPos = _videoController!.value.position;
@@ -264,8 +259,9 @@ class _ReelItemState extends State<_ReelItem> {
       _selectedQuality = quality;
     });
 
-    final ep = _episodes[_currentEpisode.clamp(0, _episodes.length - 1)];
-    final newUrl = ep.getUrlForQuality(quality);
+    if (_episodes.isEmpty) return;
+    final teaserEp = _episodes.first;
+    final newUrl = teaserEp.getUrlForQuality(quality);
     final proxiedUrl = SmartStreamProxy.instance.getProxyUrl(newUrl);
 
     _videoController?.dispose();
@@ -274,6 +270,7 @@ class _ReelItemState extends State<_ReelItem> {
         if (mounted) {
           _videoController?.seekTo(currentPos);
           _videoController?.setPlaybackSpeed(_playbackSpeed);
+          _videoController?.setLooping(true);
           _videoController?.play();
           setState(() {
             _isPlaying = true;
@@ -285,34 +282,38 @@ class _ReelItemState extends State<_ReelItem> {
       SnackBar(
         duration: const Duration(seconds: 1),
         backgroundColor: const Color(0xFF1E232E),
-        content: Text('Kualitas diubah ke: $quality'),
+        content: Text('Kualitas cuplikan diubah ke: $quality'),
       ),
     );
   }
 
-  // Cycle Kecepatan Pemutaran (1.0x -> 1.25x -> 1.5x -> 2.0x -> 1.0x)
-  void _cyclePlaybackSpeed() {
-    double nextSpeed = 1.0;
-    if (_playbackSpeed == 1.0) {
-      nextSpeed = 1.25;
-    } else if (_playbackSpeed == 1.25) {
-      nextSpeed = 1.5;
-    } else if (_playbackSpeed == 1.5) {
-      nextSpeed = 2.0;
-    } else {
-      nextSpeed = 1.0;
-    }
-
+  void _changePlaybackSpeed(double speed) {
     setState(() {
-      _playbackSpeed = nextSpeed;
+      _playbackSpeed = speed;
     });
-    _videoController?.setPlaybackSpeed(nextSpeed);
-
+    _videoController?.setPlaybackSpeed(speed);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        duration: const Duration(milliseconds: 900),
+        duration: const Duration(milliseconds: 800),
         backgroundColor: const Color(0xFF1E232E),
-        content: Text('Kecepatan video: ${nextSpeed}x'),
+        content: Text('Kecepatan video: ${speed}x'),
+      ),
+    );
+  }
+
+  void _openFullPlayer([int startEpIndex = 0]) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PlayerScreen(
+          drama: widget.drama.copyWith(
+            episodes: _episodes,
+            totalEpisodes: _episodes.isNotEmpty
+                ? _episodes.length
+                : widget.drama.totalEpisodes,
+          ),
+          initialEpisodeIndex: startEpIndex,
+        ),
       ),
     );
   }
@@ -320,11 +321,14 @@ class _ReelItemState extends State<_ReelItem> {
   @override
   Widget build(BuildContext context) {
     final isFav = AppSettingsService.instance.isFavorite(widget.drama.id);
+    final totalEps = _episodes.isNotEmpty
+        ? _episodes.length
+        : widget.drama.totalEpisodes;
 
     return Stack(
       fit: StackFit.expand,
       children: [
-        // Video Player atau Poster Banner
+        // Video Player atau Poster Banner Teaser
         GestureDetector(
           onTap: _togglePlayPause,
           child: Stack(
@@ -348,23 +352,24 @@ class _ReelItemState extends State<_ReelItem> {
                 ),
 
               // Gradient Overlay Atas & Bawah
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.black.withOpacity(0.4),
-                      Colors.transparent,
-                      Colors.black.withOpacity(0.88),
-                    ],
-                    stops: const [0.0, 0.45, 0.9],
+              if (!_clearViewMode)
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.black.withOpacity(0.4),
+                        Colors.transparent,
+                        Colors.black.withOpacity(0.88),
+                      ],
+                      stops: const [0.0, 0.45, 0.9],
+                    ),
                   ),
                 ),
-              ),
 
-              // Center Pause Icon
-              if (!_isPlaying)
+              // Pause Icon Overlay
+              if (!_isPlaying && !_clearViewMode)
                 Center(
                   child: Container(
                     padding: const EdgeInsets.all(18),
@@ -383,12 +388,12 @@ class _ReelItemState extends State<_ReelItem> {
           ),
         ),
 
-        // Subtitle Overlay (Jika Aktif)
-        if (_subtitleEnabled)
+        // Subtitle Overlay (Jika Aktif dan Tidak dalam Clear View)
+        if (_subtitleEnabled && !_clearViewMode)
           Positioned(
             left: 20,
             right: 80,
-            bottom: 110,
+            bottom: 155,
             child: Center(
               child: Container(
                 padding: const EdgeInsets.symmetric(
@@ -396,7 +401,7 @@ class _ReelItemState extends State<_ReelItem> {
                   vertical: 6,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.7),
+                  color: Colors.black.withOpacity(0.72),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: Colors.white.withOpacity(0.1)),
                 ),
@@ -425,339 +430,316 @@ class _ReelItemState extends State<_ReelItem> {
             ),
           ),
 
-        // Top Left: Live Protocol Status Pill
-        Positioned(
-          top: 48,
-          left: 16,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.45),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white.withOpacity(0.12)),
+        // Seluruh UI Kontrol (Hanya Muncul jika !_clearViewMode)
+        if (!_clearViewMode) ...[
+          // Top Left: Badge Cuplikan Teaser & Gateway
+          Positioned(
+            top: 48,
+            left: 16,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.5),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.white.withOpacity(0.12)),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.movie_creation_rounded,
+                    color: Color(0xFFFF3366),
+                    size: 14,
+                  ),
+                  SizedBox(width: 5),
+                  Text(
+                    'Cuplikan Teaser',
+                    style: TextStyle(
+                      fontFamily: 'Urbanist',
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
             ),
-            child: const Row(
+          ),
+
+          // Bottom Left: Info Drama & Tombol Utama "Tonton Semua Episode"
+          Positioned(
+            left: 16,
+            right: 84,
+            bottom: 24,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  Icons.flash_on_rounded,
-                  color: Color(0xFFFFD700),
-                  size: 14,
+                // TOMBOL UTAMA: "Tonton Semua Episode" (Kunci pengalaman pengguna)
+                GestureDetector(
+                  onTap: () => _openFullPlayer(0),
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFFF3366), Color(0xFFFF5E3A)],
+                      ),
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFFFF3366).withOpacity(0.4),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.play_arrow_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Tonton Semua Episode ($totalEps Ep)',
+                          style: const TextStyle(
+                            fontFamily: 'Urbanist',
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(
+                          Icons.chevron_right_rounded,
+                          color: Colors.white70,
+                          size: 18,
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-                SizedBox(width: 4),
+
+                // Title
                 Text(
-                  'ShortTV Indo',
-                  style: TextStyle(
+                  widget.drama.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
                     fontFamily: 'Urbanist',
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
                     color: Colors.white,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                // Description
+                Text(
+                  widget.drama.description,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontFamily: 'Urbanist',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xCCFFFFFF),
+                    height: 1.3,
                   ),
                 ),
               ],
             ),
           ),
-        ),
 
-        // Bottom Left Info Overlay
-        Positioned(
-          left: 16,
-          right: 80,
-          bottom: 28,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Episode Badge
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFFFF3366), Color(0xFFFF5E3A)],
-                  ),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  'Episode ${_currentEpisode + 1}/${widget.drama.totalEpisodes}',
-                  style: const TextStyle(
-                    fontFamily: 'Urbanist',
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              // Title
-              Text(
-                widget.drama.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontFamily: 'Urbanist',
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.white,
-                  letterSpacing: 0.2,
-                ),
-              ),
-              const SizedBox(height: 6),
-              // Description
-              Text(
-                widget.drama.description,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontFamily: 'Urbanist',
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  color: Color(0xCCFFFFFF),
-                  height: 1.3,
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        // Right Action Bar: Menu Interaktif Lengkap Termasuk 3 Menu Utama
-        Positioned(
-          right: 12,
-          bottom: 30,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // 1. Favorite / Like Button
-              GestureDetector(
-                onTap: () {
-                  AppSettingsService.instance.toggleFavorite(widget.drama);
-                  setState(() {});
-                },
-                child: _buildActionItem(
-                  icon: Icon(
-                    isFav
-                        ? Icons.favorite_rounded
-                        : Icons.favorite_border_rounded,
-                    color: isFav ? const Color(0xFFFF3366) : Colors.white,
-                    size: 28,
-                  ),
-                  label: isFav ? 'Tersimpan' : 'Suka',
-                ),
-              ),
-              const SizedBox(height: 14),
-
-              // 2. Series / Episode Drawer Button
-              GestureDetector(
-                onTap: () {
-                  EpisodeDrawer.show(
-                    context,
-                    drama: widget.drama.copyWith(
-                      episodes: _episodes,
-                      totalEpisodes: _episodes.isNotEmpty
-                          ? _episodes.length
-                          : widget.drama.totalEpisodes,
-                    ),
-                    currentEpisodeIndex: _currentEpisode,
-                    onEpisodeSelected: (newIndex) {
-                      setState(() {
-                        _currentEpisode = newIndex;
-                        _initVideo();
-                      });
-                    },
-                  );
-                },
-                child: _buildActionItem(
-                  icon: SvgPicture.asset(
-                    AppAssets.btnSeriesList,
-                    width: 24,
-                    height: 24,
-                    colorFilter: const ColorFilter.mode(
-                      Colors.white,
-                      BlendMode.srcIn,
-                    ),
-                  ),
-                  label: 'Series',
-                ),
-              ),
-              const SizedBox(height: 14),
-
-              // 3. MENU 1: Kualitas Video (Quality Switcher)
-              GestureDetector(
-                onTap: _showQualityPickerSheet,
-                child: _buildActionItem(
-                  icon: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 5,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      border: Border.all(
-                        color: const Color(0xFFFF3366),
-                        width: 1.5,
-                      ),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      _selectedQuality,
-                      style: const TextStyle(
-                        fontFamily: 'Urbanist',
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                  label: 'Kualitas',
-                ),
-              ),
-              const SizedBox(height: 14),
-
-              // 4. MENU 2: Subtitle & Sulih Suara (CC)
-              GestureDetector(
-                onTap: _showSubtitleSheet,
-                child: _buildActionItem(
-                  icon: Icon(
-                    _subtitleEnabled
-                        ? Icons.closed_caption_rounded
-                        : Icons.closed_caption_off_rounded,
-                    color: _subtitleEnabled
-                        ? const Color(0xFFFF3366)
-                        : Colors.white70,
-                    size: 26,
-                  ),
-                  label: 'Subtitle',
-                ),
-              ),
-              const SizedBox(height: 14),
-
-              // 5. MENU 3: Kecepatan & Kontrol Lainnya (Playback Speed & More)
-              GestureDetector(
-                onTap: _cyclePlaybackSpeed,
-                child: _buildActionItem(
-                  icon: Text(
-                    '${_playbackSpeed}x',
-                    style: TextStyle(
-                      fontFamily: 'Urbanist',
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                      color: _playbackSpeed > 1.0
-                          ? const Color(0xFFFF3366)
-                          : Colors.white,
-                    ),
-                  ),
-                  label: 'Speed',
-                ),
-              ),
-              const SizedBox(height: 14),
-
-              // 6. Tombol Share / Bagikan Tautan Drama
-              GestureDetector(
-                onTap: () {
-                  Clipboard.setData(
-                    ClipboardData(
-                      text:
-                          'Nonton drama "${widget.drama.title}" di GoDrama: https://github.com/Celosz-fle7/GODrama',
-                    ),
-                  );
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      duration: Duration(seconds: 1),
-                      backgroundColor: Color(0xFF1E232E),
-                      content: Text('Tautan drama disalin ke clipboard!'),
-                    ),
-                  );
-                },
-                child: _buildActionItem(
-                  icon: const Icon(
-                    Icons.share_rounded,
-                    color: Colors.white,
-                    size: 24,
-                  ),
-                  label: 'Share',
-                ),
-              ),
-              const SizedBox(height: 14),
-
-              // 7. Full Player Expand Button
-              GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => PlayerScreen(
-                        drama: widget.drama,
-                        initialEpisodeIndex: _currentEpisode,
-                      ),
-                    ),
-                  );
-                },
-                child: _buildActionItem(
-                  icon: const Icon(
-                    Icons.fullscreen_rounded,
-                    color: Colors.white,
-                    size: 28,
-                  ),
-                  label: 'Player',
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        // Video Progress Scrubber Bar di paling bawah layar
-        if (_videoController != null && _videoController!.value.isInitialized)
+          // Right Action Bar: Suka, Simpan, Series & MENU TITIK 3
           Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: SizedBox(
-              height: 12,
-              child: SliderTheme(
-                data: SliderTheme.of(context).copyWith(
-                  thumbShape: const RoundSliderThumbShape(
-                    enabledThumbRadius: 0,
+            right: 12,
+            bottom: 30,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 1. Suka / Like
+                GestureDetector(
+                  onTap: () {
+                    AppSettingsService.instance.toggleFavorite(widget.drama);
+                    setState(() {});
+                  },
+                  child: _buildActionItem(
+                    icon: Icon(
+                      isFav
+                          ? Icons.favorite_rounded
+                          : Icons.favorite_border_rounded,
+                      color: isFav ? const Color(0xFFFF3366) : Colors.white,
+                      size: 28,
+                    ),
+                    label: isFav ? 'Disukai' : 'Suka',
                   ),
-                  trackHeight: 2.5,
-                  activeTrackColor: const Color(0xFFFF3366),
-                  inactiveTrackColor: Colors.white24,
-                  overlayShape: SliderComponentShape.noOverlay,
                 ),
-                child: Slider(
-                  value: _isDraggingScrubber
-                      ? _scrubberValue
-                      : _videoController!.value.position.inMilliseconds
-                            .toDouble()
-                            .clamp(
-                              0.0,
-                              _videoController!.value.duration.inMilliseconds
-                                  .toDouble(),
-                            ),
-                  min: 0.0,
-                  max:
-                      _videoController!.value.duration.inMilliseconds
-                              .toDouble() >
-                          0
-                      ? _videoController!.value.duration.inMilliseconds
-                            .toDouble()
-                      : 1.0,
-                  onChangeStart: (val) {
-                    setState(() {
-                      _isDraggingScrubber = true;
-                      _scrubberValue = val;
-                    });
-                  },
-                  onChanged: (val) {
-                    setState(() {
-                      _scrubberValue = val;
-                    });
-                  },
-                  onChangeEnd: (val) {
-                    setState(() {
-                      _isDraggingScrubber = false;
-                    });
-                    _videoController?.seekTo(
-                      Duration(milliseconds: val.toInt()),
+                const SizedBox(height: 16),
+
+                // 2. Series / Drawer Episode
+                GestureDetector(
+                  onTap: () {
+                    EpisodeDrawer.show(
+                      context,
+                      drama: widget.drama.copyWith(
+                        episodes: _episodes,
+                        totalEpisodes: totalEps,
+                      ),
+                      currentEpisodeIndex: 0,
+                      onEpisodeSelected: (selectedIdx) {
+                        _openFullPlayer(selectedIdx);
+                      },
                     );
                   },
+                  child: _buildActionItem(
+                    icon: SvgPicture.asset(
+                      AppAssets.btnSeriesList,
+                      width: 24,
+                      height: 24,
+                      colorFilter: const ColorFilter.mode(
+                        Colors.white,
+                        BlendMode.srcIn,
+                      ),
+                    ),
+                    label: 'Episode',
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // 3. MENU TITIK 3 (Kualitas, Subtitle, Speed, Mode Bersih, Bagikan)
+                GestureDetector(
+                  onTap: _showMoreOptionsMenu,
+                  child: _buildActionItem(
+                    icon: const Icon(
+                      Icons.more_horiz_rounded,
+                      color: Colors.white,
+                      size: 28,
+                    ),
+                    label: 'Lainnya',
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // 4. Tombol Buka Player Penuh
+                GestureDetector(
+                  onTap: () => _openFullPlayer(0),
+                  child: _buildActionItem(
+                    icon: const Icon(
+                      Icons.fullscreen_rounded,
+                      color: Colors.white,
+                      size: 28,
+                    ),
+                    label: 'Player',
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Video Progress Scrubber Bar Tipis di Paling Bawah
+          if (_videoController != null && _videoController!.value.isInitialized)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: SizedBox(
+                height: 12,
+                child: SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    thumbShape: const RoundSliderThumbShape(
+                      enabledThumbRadius: 0,
+                    ),
+                    trackHeight: 2.5,
+                    activeTrackColor: const Color(0xFFFF3366),
+                    inactiveTrackColor: Colors.white24,
+                    overlayShape: SliderComponentShape.noOverlay,
+                  ),
+                  child: Slider(
+                    value: _isDraggingScrubber
+                        ? _scrubberValue
+                        : _videoController!.value.position.inMilliseconds
+                              .toDouble()
+                              .clamp(
+                                0.0,
+                                _videoController!.value.duration.inMilliseconds
+                                    .toDouble(),
+                              ),
+                    min: 0.0,
+                    max:
+                        _videoController!.value.duration.inMilliseconds
+                                .toDouble() >
+                            0
+                        ? _videoController!.value.duration.inMilliseconds
+                              .toDouble()
+                        : 1.0,
+                    onChangeStart: (val) {
+                      setState(() {
+                        _isDraggingScrubber = true;
+                        _scrubberValue = val;
+                      });
+                    },
+                    onChanged: (val) {
+                      setState(() {
+                        _scrubberValue = val;
+                      });
+                    },
+                    onChangeEnd: (val) {
+                      setState(() {
+                        _isDraggingScrubber = false;
+                      });
+                      _videoController?.seekTo(
+                        Duration(milliseconds: val.toInt()),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ),
+        ],
+
+        // Clear View Mode Indicator (Jika Aktif)
+        if (_clearViewMode)
+          Positioned(
+            top: 48,
+            right: 16,
+            child: GestureDetector(
+              onTap: () => setState(() => _clearViewMode = false),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.6),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.white24),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.visibility_off_rounded,
+                      color: Colors.white,
+                      size: 14,
+                    ),
+                    SizedBox(width: 6),
+                    Text(
+                      'Kembalikan Tampilan',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -794,7 +776,215 @@ class _ReelItemState extends State<_ReelItem> {
     );
   }
 
-  // Bottom Sheet Pemilihan Kualitas Video (Menu 1)
+  /// MODAL TITIK 3 LENGKAP & MODERN (Kualitas, Subtitle, Kecepatan, Clear View, Share)
+  void _showMoreOptionsMenu() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1E232E),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  vertical: 16,
+                  horizontal: 16,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.white24,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Opsi & Pengaturan Cuplikan',
+                      style: TextStyle(
+                        fontFamily: 'Urbanist',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // 1. Opsi Kualitas Video
+                    ListTile(
+                      leading: const Icon(
+                        Icons.hd_rounded,
+                        color: Color(0xFFFF3366),
+                      ),
+                      title: const Text(
+                        'Kualitas Video',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      subtitle: Text(
+                        'Resolusi saat ini: $_selectedQuality',
+                        style: const TextStyle(
+                          color: Colors.white60,
+                          fontSize: 12,
+                        ),
+                      ),
+                      trailing: const Icon(
+                        Icons.chevron_right_rounded,
+                        color: Colors.white54,
+                      ),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _showQualityPickerSheet();
+                      },
+                    ),
+                    const Divider(color: Colors.white10),
+
+                    // 2. Opsi Subtitle & Audio
+                    ListTile(
+                      leading: Icon(
+                        _subtitleEnabled
+                            ? Icons.closed_caption_rounded
+                            : Icons.closed_caption_off_rounded,
+                        color: _subtitleEnabled
+                            ? const Color(0xFFFF3366)
+                            : Colors.white60,
+                      ),
+                      title: const Text(
+                        'Subtitle & Sulih Suara',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      subtitle: Text(
+                        _subtitleEnabled
+                            ? 'Aktif ($_subtitleLanguage)'
+                            : 'Nonaktif',
+                        style: const TextStyle(
+                          color: Colors.white60,
+                          fontSize: 12,
+                        ),
+                      ),
+                      trailing: const Icon(
+                        Icons.chevron_right_rounded,
+                        color: Colors.white54,
+                      ),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _showSubtitleSheet();
+                      },
+                    ),
+                    const Divider(color: Colors.white10),
+
+                    // 3. Opsi Kecepatan Putar (Playback Speed)
+                    ListTile(
+                      leading: const Icon(
+                        Icons.speed_rounded,
+                        color: Color(0xFFFF3366),
+                      ),
+                      title: const Text(
+                        'Kecepatan Putar',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      subtitle: Text(
+                        'Kecepatan saat ini: ${_playbackSpeed}x',
+                        style: const TextStyle(
+                          color: Colors.white60,
+                          fontSize: 12,
+                        ),
+                      ),
+                      trailing: const Icon(
+                        Icons.chevron_right_rounded,
+                        color: Colors.white54,
+                      ),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _showSpeedPickerSheet();
+                      },
+                    ),
+                    const Divider(color: Colors.white10),
+
+                    // 4. Opsi Mode Bersih (Clear View)
+                    ListTile(
+                      leading: const Icon(
+                        Icons.visibility_off_rounded,
+                        color: Colors.white70,
+                      ),
+                      title: const Text(
+                        'Mode Layar Bersih',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      subtitle: const Text(
+                        'Sembunyikan tombol UI untuk tampilan video jernih',
+                        style: TextStyle(color: Colors.white60, fontSize: 12),
+                      ),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        setState(() {
+                          _clearViewMode = true;
+                        });
+                      },
+                    ),
+                    const Divider(color: Colors.white10),
+
+                    // 5. Bagikan Drama (Share)
+                    ListTile(
+                      leading: const Icon(
+                        Icons.share_rounded,
+                        color: Colors.white70,
+                      ),
+                      title: const Text(
+                        'Bagikan Cuplikan',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      subtitle: const Text(
+                        'Salin tautan drama ini ke clipboard',
+                        style: TextStyle(color: Colors.white60, fontSize: 12),
+                      ),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        Clipboard.setData(
+                          ClipboardData(
+                            text:
+                                'Nonton cuplikan "${widget.drama.title}" di GoDrama: https://github.com/Celosz-fle7/GODrama',
+                          ),
+                        );
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            duration: Duration(seconds: 1),
+                            backgroundColor: Color(0xFF1E232E),
+                            content: Text('Tautan cuplikan berhasil disalin!'),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   void _showQualityPickerSheet() {
     final available = ['1080p', '720p', '480p'];
     showModalBottomSheet(
@@ -810,17 +1000,8 @@ class _ReelItemState extends State<_ReelItem> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.white24,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                const SizedBox(height: 16),
                 const Text(
-                  'Kualitas Streaming Reel',
+                  'Pilih Kualitas Cuplikan',
                   style: TextStyle(
                     fontFamily: 'Urbanist',
                     fontSize: 16,
@@ -840,10 +1021,10 @@ class _ReelItemState extends State<_ReelItem> {
                     ),
                     title: Text(
                       q == '1080p'
-                          ? '1080p Full HD (Kualitas Tertinggi)'
+                          ? '1080p Full HD (Kualitas Tinggi)'
                           : q == '720p'
-                          ? '720p HD (Standar Rekomendasi)'
-                          : '480p Hemat Kuota (Streaming Cepat)',
+                          ? '720p HD Standard (Rekomendasi)'
+                          : '480p Hemat Kuota (Cepat)',
                       style: TextStyle(
                         fontFamily: 'Urbanist',
                         fontSize: 14,
@@ -875,7 +1056,6 @@ class _ReelItemState extends State<_ReelItem> {
     );
   }
 
-  // Bottom Sheet Subtitle & Sulih Suara (Menu 2)
   void _showSubtitleSheet() {
     showModalBottomSheet(
       context: context,
@@ -888,25 +1068,11 @@ class _ReelItemState extends State<_ReelItem> {
           builder: (context, setSheetState) {
             return SafeArea(
               child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  vertical: 16,
-                  horizontal: 16,
-                ),
+                padding: const EdgeInsets.all(16),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Center(
-                      child: Container(
-                        width: 40,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: Colors.white24,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
                     const Center(
                       child: Text(
                         'Subtitle & Audio Sulih Suara',
@@ -918,9 +1084,9 @@ class _ReelItemState extends State<_ReelItem> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 14),
 
-                    // Info Sulih Suara Card
+                    // Info Sulih Suara
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
@@ -952,7 +1118,7 @@ class _ReelItemState extends State<_ReelItem> {
                                 ),
                                 SizedBox(height: 2),
                                 Text(
-                                  'Rekaman sulih suara studio resmi bawaan ShortTV',
+                                  'Audio studio asli Indonesia terintegrasi bawaan server',
                                   style: TextStyle(
                                     color: Colors.white60,
                                     fontSize: 11,
@@ -964,32 +1130,19 @@ class _ReelItemState extends State<_ReelItem> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 14),
 
-                    // Toggle Subtitle
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
                       activeColor: const Color(0xFFFF3366),
                       title: const Text(
                         'Tampilkan Subtitle Teks',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      subtitle: const Text(
-                        'Teks terjemahan di layar video reel',
-                        style: TextStyle(color: Colors.white60, fontSize: 12),
+                        style: TextStyle(color: Colors.white),
                       ),
                       value: _subtitleEnabled,
                       onChanged: (val) {
-                        setSheetState(() {
-                          _subtitleEnabled = val;
-                        });
-                        setState(() {
-                          _subtitleEnabled = val;
-                        });
+                        setSheetState(() => _subtitleEnabled = val);
+                        setState(() => _subtitleEnabled = val);
                         AppSettingsService.instance.toggleSubtitles(val);
                       },
                     ),
@@ -1044,6 +1197,63 @@ class _ReelItemState extends State<_ReelItem> {
               ),
             );
           },
+        );
+      },
+    );
+  }
+
+  void _showSpeedPickerSheet() {
+    final speeds = [1.0, 1.25, 1.5, 2.0];
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1E232E),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Kecepatan Putar Video',
+                  style: TextStyle(
+                    fontFamily: 'Urbanist',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                ...speeds.map((s) {
+                  final isSelected = s == _playbackSpeed;
+                  return ListTile(
+                    title: Text(
+                      '${s}x ${s == 1.0 ? '(Normal)' : ''}',
+                      style: TextStyle(
+                        fontFamily: 'Urbanist',
+                        color: isSelected
+                            ? const Color(0xFFFF3366)
+                            : Colors.white,
+                        fontWeight: isSelected
+                            ? FontWeight.w800
+                            : FontWeight.w500,
+                      ),
+                    ),
+                    trailing: isSelected
+                        ? const Icon(Icons.check, color: Color(0xFFFF3366))
+                        : null,
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _changePlaybackSpeed(s);
+                    },
+                  );
+                }),
+              ],
+            ),
+          ),
         );
       },
     );

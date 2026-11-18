@@ -9,9 +9,12 @@ class AppSettingsService extends ChangeNotifier {
   String _defaultQuality = '1080p';
   bool _dataSaverMode = false;
   bool _subtitlesEnabled = true;
+  bool _autoPlayNext = true;
+  bool _notificationsEnabled = true;
   String _selectedLanguage = 'Bahasa Indonesia';
   String _userName = 'GoDrama VIP';
   String _userId = 'GD-892401';
+  int _avatarIndex = 0;
 
   final List<DramaModel> _watchHistory = [];
   final Set<String> _favoriteIds = {};
@@ -19,9 +22,12 @@ class AppSettingsService extends ChangeNotifier {
   String get defaultQuality => _dataSaverMode ? '480p' : _defaultQuality;
   bool get dataSaverMode => _dataSaverMode;
   bool get subtitlesEnabled => _subtitlesEnabled;
+  bool get autoPlayNext => _autoPlayNext;
+  bool get notificationsEnabled => _notificationsEnabled;
   String get selectedLanguage => _selectedLanguage;
   String get userName => _userName;
   String get userId => _userId;
+  int get avatarIndex => _avatarIndex;
   List<DramaModel> get watchHistory => List.unmodifiable(_watchHistory);
   Set<String> get favoriteIds => Set.unmodifiable(_favoriteIds);
 
@@ -40,6 +46,16 @@ class AppSettingsService extends ChangeNotifier {
     notifyListeners();
   }
 
+  void toggleAutoPlayNext(bool enabled) {
+    _autoPlayNext = enabled;
+    notifyListeners();
+  }
+
+  void toggleNotifications(bool enabled) {
+    _notificationsEnabled = enabled;
+    notifyListeners();
+  }
+
   void setSelectedLanguage(String lang) {
     _selectedLanguage = lang;
     notifyListeners();
@@ -47,6 +63,11 @@ class AppSettingsService extends ChangeNotifier {
 
   void updateProfileName(String name) {
     _userName = name;
+    notifyListeners();
+  }
+
+  void setAvatarIndex(int index) {
+    _avatarIndex = index;
     notifyListeners();
   }
 

@@ -11,6 +11,8 @@ class DramaModel {
   final bool isTrending;
   final List<EpisodeModel> episodes;
 
+  String get category => tags.isNotEmpty ? tags.first : 'Drama';
+
   const DramaModel({
     required this.id,
     required this.title,
