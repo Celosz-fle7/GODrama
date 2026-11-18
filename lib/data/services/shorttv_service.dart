@@ -33,6 +33,8 @@ class ShortTvService {
     }
   }
 
+  /// Format path dan query string sesuai spesifikasi kanonis MovieBox / ShortTV:
+  /// Query string wajib di-sort alfabetis berdasarkan key tanpa merusak nilai raw parameter.
   String _formatPathQuery(String pathWithQuery) {
     final parts = pathWithQuery.split('?');
     final path = parts[0];
@@ -43,11 +45,11 @@ class ShortTvService {
     for (final part in query.split('&')) {
       if (part.contains('=')) {
         final eqIdx = part.indexOf('=');
-        final k = Uri.decodeComponent(part.substring(0, eqIdx));
-        final v = Uri.decodeComponent(part.substring(eqIdx + 1));
+        final k = part.substring(0, eqIdx);
+        final v = part.substring(eqIdx + 1);
         pairs.add(MapEntry(k, v));
       } else if (part.isNotEmpty) {
-        pairs.add(MapEntry(Uri.decodeComponent(part), ''));
+        pairs.add(MapEntry(part, ''));
       }
     }
     pairs.sort((a, b) => a.key.compareTo(b.key));
@@ -119,14 +121,19 @@ class ShortTvService {
       request.headers.set('User-Agent', _userAgent);
       request.headers.set('accept', '*/*');
       request.headers.set('x-tr-signature', sig);
+      request.headers.set('x-tr-timestamp', ts);
       request.headers.set('X-Client-Token', '$ts,$revTsMd5');
       request.headers.set('X-Client-Status', '1');
+      request.headers.set('X-Client-Language', 'id');
+      request.headers.set('X-Client-DeviceId', _deviceId);
       request.headers.set(
         'X-Client-Info',
         jsonEncode({
           'device_id': _deviceId,
-          'system_language': 'in',
+          'package': 'com.community.oneroom',
           'region': 'ID',
+          'language': 'in',
+          'model': 'Infinix X6870',
           'X-Play-Mode': '2',
         }),
       );
@@ -178,22 +185,34 @@ class ShortTvService {
       request.headers.set('User-Agent', _userAgent);
       request.headers.set('accept', '*/*');
       request.headers.set('x-tr-signature', sig);
-      if (contentType.isNotEmpty) {
-        request.headers.set('content-type', contentType);
-      }
-      if (_token != null) {
-        request.headers.set('authorization', 'Bearer $_token');
-      }
+      request.headers.set('x-tr-timestamp', ts);
       request.headers.set('X-Client-Status', '1');
+      request.headers.set('X-Client-Language', 'id');
+      request.headers.set('X-Client-DeviceId', _deviceId);
       request.headers.set(
         'X-Client-Info',
         jsonEncode({
           'device_id': _deviceId,
-          'system_language': 'in',
+          'package': 'com.community.oneroom',
           'region': 'ID',
+          'language': 'in',
+          'model': 'Infinix X6870',
           'X-Play-Mode': '2',
         }),
       );
+
+      if (contentType.isNotEmpty) {
+        request.headers.set('content-type', contentType);
+      }
+
+      if (_token != null && _token!.isNotEmpty) {
+        request.headers.set('authorization', 'Bearer $_token');
+      } else {
+        final revTsMd5 = md5
+            .convert(utf8.encode(ts.split('').reversed.join('')))
+            .toString();
+        request.headers.set('X-Client-Token', '$ts,$revTsMd5');
+      }
 
       if (bodyStr.isNotEmpty) {
         request.add(utf8.encode(bodyStr));
@@ -303,9 +322,10 @@ class ShortTvService {
 
     final resp = await _request(
       'POST',
-      '/wefeed-mobile-bff/subject-api/list',
+      '/wefeed-mobile-bff/subject-api/search',
       bodyJson: payload,
     );
+
     if (resp != null &&
         resp['code'] == 0 &&
         resp['data'] is Map<String, dynamic>) {
@@ -314,19 +334,21 @@ class ShortTvService {
         return items
             .whereType<Map<String, dynamic>>()
             .map(_mapToDramaModel)
+            .where((d) => d.id.isNotEmpty)
             .toList();
       }
     }
     return [];
   }
 
-  /// Ambil daftar episode dan CloudFront Signed MP4 stream ShortTV lengkap dengan multi-resolusi & subtitle
+  /// Ambil daftar episode dan stream URL langsung dari ShortTV API:
+  /// /wefeed-mobile-bff/shorts/mini-list?endPosition=100&pagerMode=1&startPosition=0&subjectId={id}
   Future<List<EpisodeModel>> fetchShortTvEpisodes(
     String subjectId, {
-    int startPos = 1,
-    int endPos = 30,
+    int startPos = 0,
+    int endPosition = 100,
   }) async {
-    final safeEnd = (endPos - startPos >= 30) ? (startPos + 29) : endPos;
+    final safeEnd = endPosition < startPos ? startPos + 50 : endPosition;
     final path =
         '/wefeed-mobile-bff/shorts/mini-list?endPosition=$safeEnd&pagerMode=1&startPosition=$startPos&subjectId=$subjectId';
 
@@ -411,52 +433,55 @@ class ShortTvService {
     return [];
   }
 
-  DramaModel _mapToDramaModel(Map<String, dynamic> raw) {
-    final subjectId = raw['subjectId']?.toString() ?? '';
-    final title = raw['title']?.toString() ?? 'Short Drama';
-    final coverObj = raw['cover'] as Map<String, dynamic>?;
-    final coverUrl = coverObj?['url']?.toString() ?? '';
-    final bannerObj = raw['banner'] as Map<String, dynamic>?;
-    final bannerUrl = bannerObj?['url']?.toString() ?? coverUrl;
+  DramaModel _mapToDramaModel(Map<String, dynamic> json) {
+    final subjectId =
+        json['subjectId']?.toString() ??
+        json['id']?.toString() ??
+        json['miniId']?.toString() ??
+        '';
+    final title = json['title']?.toString() ?? 'Short Drama';
     final desc =
-        raw['description']?.toString() ??
-        raw['brief']?.toString() ??
-        'ShortTV Drama Series';
+        json['description']?.toString() ??
+        json['brief']?.toString() ??
+        'Drama pendek populer ber-subtitle dan bersulih suara Indonesia.';
+    final cover = json['cover']?.toString() ?? '';
+    final banner = json['banner']?.toString() ?? cover;
+    final totalEpisodes =
+        (json['totalEpisodes'] as num?)?.toInt() ??
+        (json['episodesCount'] as num?)?.toInt() ??
+        (json['episodeCount'] as num?)?.toInt() ??
+        50;
 
-    // Tags
-    final tagsList = <String>[];
-    final genreStr = raw['genre']?.toString() ?? '';
-    if (genreStr.isNotEmpty) {
-      tagsList.addAll(genreStr.split(',').map((g) => g.trim()));
-    }
-    if (tagsList.isEmpty) tagsList.add('ShortTV');
+    final tags = <String>[];
+    if (json['genre'] != null) tags.add(json['genre'].toString());
+    if (json['classify'] != null) tags.add(json['classify'].toString());
+    if (tags.isEmpty) tags.addAll(['Trending', 'Sulih Suara', 'Romansa']);
 
-    final eps =
-        (raw['shortsEpisode'] as num?)?.toInt() ??
-        (raw['totalEpisodes'] as num?)?.toInt() ??
-        (raw['episodesCount'] as num?)?.toInt() ??
-        40;
+    final viewCountNum =
+        (json['viewCount'] as num?)?.toInt() ??
+        (json['playCount'] as num?)?.toInt() ??
+        Random().nextInt(80000) + 12000;
+    final viewCountStr = viewCountNum > 1000
+        ? '${(viewCountNum / 1000).toStringAsFixed(1)}K'
+        : '$viewCountNum';
 
-    final viewersRaw = raw['viewers']?.toString() ?? '';
-    final viewCount = viewersRaw.isNotEmpty
-        ? viewersRaw
-        : '${(Random().nextInt(15) + 3)}.${Random().nextInt(9)}M';
-    final rateVal =
-        (raw['rate'] as num?)?.toDouble() ??
-        (raw['imdbRate'] as num?)?.toDouble() ??
-        4.8;
+    final rating =
+        ((json['rating'] as num?)?.toDouble() ??
+                (4.5 + Random().nextDouble() * 0.4))
+            .clamp(4.0, 5.0);
 
     return DramaModel(
       id: subjectId,
       title: title,
-      coverUrl: coverUrl,
-      bannerUrl: bannerUrl,
+      coverUrl: cover,
+      bannerUrl: banner,
       description: desc,
-      tags: tagsList,
-      totalEpisodes: eps,
-      viewCount: viewCount,
-      rating: rateVal,
+      tags: tags,
+      totalEpisodes: totalEpisodes,
+      viewCount: viewCountStr,
+      rating: double.parse(rating.toStringAsFixed(1)),
       isTrending: true,
+      episodes: const [],
     );
   }
 }

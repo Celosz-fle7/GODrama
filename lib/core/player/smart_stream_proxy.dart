@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:path_provider/path_provider.dart';
 
@@ -10,6 +9,7 @@ class SmartStreamProxy {
 
   HttpServer? _server;
   int _port = 0;
+  int get port => _port;
   bool _isStarting = false;
   Directory? _cacheDir;
 
@@ -37,11 +37,9 @@ class SmartStreamProxy {
     }
   }
 
-  /// Ubah URL remote video menjadi URL local proxy yang mendukung range cache
+  /// Mengembalikan URL video streaming langsung untuk akselerasi native ExoPlayer (Zero-Proxy Latency)
   String getProxyUrl(String remoteUrl) {
-    if (_server == null || _port == 0) return remoteUrl;
-    final encoded = Uri.encodeComponent(remoteUrl);
-    return 'http://127.0.0.1:$_port/stream?url=$encoded';
+    return remoteUrl;
   }
 
   /// Preload awal video (2MB pertama) di background (mirip FlutterAliPlayerMediaLoader)
@@ -84,7 +82,6 @@ class SmartStreamProxy {
     }
 
     final remoteUri = Uri.parse(remoteUrlParam);
-    final cacheFile = _getCacheFile(remoteUrlParam);
 
     try {
       final client = HttpClient()

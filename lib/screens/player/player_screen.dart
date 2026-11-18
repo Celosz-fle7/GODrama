@@ -115,32 +115,37 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _positionTimer?.cancel();
     _controller?.dispose();
     _controller = VideoPlayerController.networkUrl(Uri.parse(proxiedUrl))
-      ..initialize().then((_) {
-        if (mounted) {
-          _controller?.setPlaybackSpeed(_playbackSpeed);
-          _controller?.play();
-          setState(() {});
+      ..initialize()
+          .then((_) {
+            if (mounted) {
+              _controller?.setPlaybackSpeed(_playbackSpeed);
+              _controller?.play();
+              setState(() {});
 
-          // Monitor posisi secara berkala
-          _positionTimer = Timer.periodic(const Duration(milliseconds: 250), (
-            _,
-          ) {
-            if (mounted &&
-                _controller != null &&
-                _controller!.value.isInitialized) {
-              if (!_isDraggingScrubber) {
-                setState(() {});
+              // Monitor posisi secara berkala
+              _positionTimer = Timer.periodic(
+                const Duration(milliseconds: 250),
+                (_) {
+                  if (mounted &&
+                      _controller != null &&
+                      _controller!.value.isInitialized) {
+                    if (!_isDraggingScrubber) {
+                      setState(() {});
+                    }
+                  }
+                },
+              );
+
+              // Preload episode berikutnya di latar belakang
+              if (_currentEpisodeIndex + 1 < _episodes.length) {
+                final nextEp = _episodes[_currentEpisodeIndex + 1];
+                SmartStreamProxy.instance.preloadNextEpisode(nextEp.videoUrl);
               }
             }
+          })
+          .catchError((err) {
+            debugPrint('[PlayerScreen] Video init error: $err');
           });
-
-          // Preload episode berikutnya di latar belakang
-          if (_currentEpisodeIndex + 1 < _episodes.length) {
-            final nextEp = _episodes[_currentEpisodeIndex + 1];
-            SmartStreamProxy.instance.preloadNextEpisode(nextEp.videoUrl);
-          }
-        }
-      });
   }
 
   void _changeQuality(String quality) {
@@ -157,22 +162,27 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _positionTimer?.cancel();
     _controller?.dispose();
     _controller = VideoPlayerController.networkUrl(Uri.parse(proxiedUrl))
-      ..initialize().then((_) {
-        if (mounted) {
-          _controller?.seekTo(currentPos);
-          _controller?.setPlaybackSpeed(_playbackSpeed);
-          _controller?.play();
-          setState(() {});
-
-          _positionTimer = Timer.periodic(const Duration(milliseconds: 250), (
-            _,
-          ) {
-            if (mounted && !_isDraggingScrubber) {
+      ..initialize()
+          .then((_) {
+            if (mounted) {
+              _controller?.seekTo(currentPos);
+              _controller?.setPlaybackSpeed(_playbackSpeed);
+              _controller?.play();
               setState(() {});
+
+              _positionTimer = Timer.periodic(
+                const Duration(milliseconds: 250),
+                (_) {
+                  if (mounted && !_isDraggingScrubber) {
+                    setState(() {});
+                  }
+                },
+              );
             }
+          })
+          .catchError((err) {
+            debugPrint('[PlayerScreen] Change quality error: $err');
           });
-        }
-      });
   }
 
   void _changeSpeed(double speed) {

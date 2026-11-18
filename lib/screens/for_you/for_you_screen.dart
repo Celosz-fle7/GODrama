@@ -195,18 +195,22 @@ class _ReelItemState extends State<_ReelItem> {
     _disposeVideo();
 
     _videoController = VideoPlayerController.networkUrl(Uri.parse(proxiedUrl))
-      ..initialize().then((_) {
-        if (mounted) {
-          _videoController?.setPlaybackSpeed(_playbackSpeed);
-          _videoController?.setLooping(true); // Looping cuplikan saja
-          _videoController?.play();
-          setState(() {
-            _isPlaying = true;
-          });
+      ..initialize()
+          .then((_) {
+            if (mounted) {
+              _videoController?.setPlaybackSpeed(_playbackSpeed);
+              _videoController?.setLooping(true); // Looping cuplikan saja
+              _videoController?.play();
+              setState(() {
+                _isPlaying = true;
+              });
 
-          _startProgressTracker();
-        }
-      });
+              _startProgressTracker();
+            }
+          })
+          .catchError((err) {
+            debugPrint('[ForYouScreen] Video init error: $err');
+          });
   }
 
   void _startProgressTracker() {

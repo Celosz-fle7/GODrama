@@ -1,8 +1,8 @@
 {
-  "version_code": 3,
-  "version_name": "1.0.2",
+  "version_code": 4,
+  "version_name": "1.0.3",
   "is_force_update": false,
-  "title": "Pembaruan GoDrama v1.0.2!",
-  "changelog": "- Tab For You: Menu titik 3 rapi & modern (Kualitas Video, Subtitle & Sulih Suara, Kecepatan Putar, Mode Layar Bersih, Bagikan)\n- Mode Cuplikan Teaser: For You hanya memutar cuplikan/trailer Episode 1 dan bebas di-scroll pengguna\n- Tombol 'Tonton Semua Episode': Tombol langsung memutar serial penuh di Player Screen\n- Tab Akun & Pengaturan Berfungsi Penuh: Edit profil, riwayat tontonan interaktif, kelola favorit, bersihkan cache disk nyata, mode hemat kuota, dan bantuan",
-  "download_url": "https://github.com/Celosz-fle7/GODrama/releases/download/v1.0.2/GoDrama-v1.0.2-release.apk"
+  "title": "Pembaruan GoDrama v1.0.3!",
+  "changelog": "- Akselerasi Native Streaming: Pemutaran video CDN direct tanpa bottleneck loopback proxy\n- Perbaikan Protokol ShortTV: Sinkronisasi signature canonical & header timestamp id\n- Tab Profil & Pengaturan Berfungsi Penuh: Edit profil, riwayat tontonan, favorit, bersihkan cache disk nyata",
+  "download_url": "https://github.com/Celosz-fle7/GODrama/releases/download/v1.0.3/GoDrama-v1.0.3-release.apk"
 }
