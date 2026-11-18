@@ -4,6 +4,7 @@ import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_assets.dart';
 import '../../data/mock/mock_data.dart';
 import '../../data/models/drama_model.dart';
+import '../../data/services/shorttv_service.dart';
 import '../../widgets/drama_card.dart';
 import '../../widgets/hero_banner.dart';
 import '../player/player_screen.dart';
@@ -18,10 +19,29 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   String _selectedCategoryId = 'trending';
+  List<DramaModel> _dramas = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDramas();
+  }
+
+  Future<void> _loadDramas() async {
+    final liveDramas = await ShortTvService.instance.fetchShortTvDramas(page: 1, perPage: 20);
+    if (mounted) {
+      setState(() {
+        _dramas = liveDramas.isNotEmpty ? liveDramas : MockData.allDramas;
+        _isLoading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final dramas = MockData.allDramas;
+    final dramas = _dramas.isNotEmpty ? _dramas : MockData.allDramas;
+    final featured = dramas.take(4).toList();
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -30,7 +50,7 @@ class _HomeScreenState extends State<HomeScreen> {
           color: AppColors.primary,
           backgroundColor: AppColors.surface,
           onRefresh: () async {
-            await Future.delayed(const Duration(milliseconds: 600));
+            await _loadDramas();
           },
           child: CustomScrollView(
             slivers: [
@@ -98,7 +118,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Padding(
                   padding: const EdgeInsets.only(top: 4, bottom: 16),
                   child: HeroBanner(
-                    dramas: MockData.featuredDramas,
+                    dramas: featured,
                     onDramaTap: (drama) => _openPlayer(drama),
                   ),
                 ),

@@ -4,6 +4,7 @@ import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_assets.dart';
 import '../../data/mock/mock_data.dart';
 import '../../data/models/drama_model.dart';
+import '../../data/services/shorttv_service.dart';
 import '../../widgets/drama_card.dart';
 import '../player/player_screen.dart';
 
@@ -29,7 +30,7 @@ class _SearchScreenState extends State<SearchScreen> {
     'Strong Female',
   ];
 
-  void _onSearch(String query) {
+  void _onSearch(String query) async {
     if (query.trim().isEmpty) {
       setState(() {
         _isSearching = false;
@@ -38,7 +39,7 @@ class _SearchScreenState extends State<SearchScreen> {
       return;
     }
 
-    final filtered = MockData.allDramas.where((drama) {
+    final localMatches = MockData.allDramas.where((drama) {
       final titleMatch = drama.title.toLowerCase().contains(query.toLowerCase());
       final tagMatch = drama.tags.any((t) => t.toLowerCase().contains(query.toLowerCase()));
       return titleMatch || tagMatch;
@@ -46,8 +47,20 @@ class _SearchScreenState extends State<SearchScreen> {
 
     setState(() {
       _isSearching = true;
-      _results = filtered;
+      _results = localMatches;
     });
+
+    // Cari live ShortTV drama dari MovieBox backend
+    final remoteResults = await ShortTvService.instance.searchShortTv(query);
+    if (mounted && _isSearching && _searchController.text == query) {
+      final combined = [...remoteResults, ...localMatches];
+      // Deduplicate by ID
+      final seen = <String>{};
+      final unique = combined.where((d) => seen.add(d.id)).toList();
+      setState(() {
+        _results = unique;
+      });
+    }
   }
 
   @override

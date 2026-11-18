@@ -24,6 +24,34 @@ class DramaModel {
     this.isTrending = false,
     this.episodes = const [],
   });
+
+  DramaModel copyWith({
+    String? id,
+    String? title,
+    String? coverUrl,
+    String? bannerUrl,
+    String? description,
+    List<String>? tags,
+    int? totalEpisodes,
+    String? viewCount,
+    double? rating,
+    bool? isTrending,
+    List<EpisodeModel>? episodes,
+  }) {
+    return DramaModel(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      coverUrl: coverUrl ?? this.coverUrl,
+      bannerUrl: bannerUrl ?? this.bannerUrl,
+      description: description ?? this.description,
+      tags: tags ?? this.tags,
+      totalEpisodes: totalEpisodes ?? this.totalEpisodes,
+      viewCount: viewCount ?? this.viewCount,
+      rating: rating ?? this.rating,
+      isTrending: isTrending ?? this.isTrending,
+      episodes: episodes ?? this.episodes,
+    );
+  }
 }
 
 class EpisodeModel {

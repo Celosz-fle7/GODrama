@@ -7,6 +7,7 @@ import '../../core/constants/app_assets.dart';
 import '../../core/player/smart_stream_proxy.dart';
 import '../../data/mock/mock_data.dart';
 import '../../data/models/drama_model.dart';
+import '../../data/services/shorttv_service.dart';
 import '../../widgets/episode_drawer.dart';
 import '../player/player_screen.dart';
 
@@ -19,8 +20,23 @@ class ForYouScreen extends StatefulWidget {
 
 class _ForYouScreenState extends State<ForYouScreen> {
   final PageController _pageController = PageController();
-  final List<DramaModel> _dramas = MockData.allDramas;
+  List<DramaModel> _dramas = MockData.allDramas;
   int _activeDramaIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLiveShortDramas();
+  }
+
+  Future<void> _loadLiveShortDramas() async {
+    final live = await ShortTvService.instance.fetchShortTvDramas(page: 1, perPage: 15);
+    if (mounted && live.isNotEmpty) {
+      setState(() {
+        _dramas = live;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -66,10 +82,13 @@ class _ReelItemState extends State<_ReelItem> {
   bool _isLiked = false;
   int _currentEpisode = 0;
   bool _isPlaying = true;
+  List<EpisodeModel> _episodes = [];
+  bool _isLoadingEpisodes = false;
 
   @override
   void initState() {
     super.initState();
+    _episodes = widget.drama.episodes;
     if (widget.isActive) {
       _initVideo();
     }
@@ -85,9 +104,20 @@ class _ReelItemState extends State<_ReelItem> {
     }
   }
 
-  void _initVideo() {
-    if (widget.drama.episodes.isEmpty) return;
-    final ep = widget.drama.episodes[_currentEpisode];
+  Future<void> _initVideo() async {
+    if (_episodes.isEmpty && !_isLoadingEpisodes) {
+      _isLoadingEpisodes = true;
+      final liveEps = await ShortTvService.instance.fetchShortTvEpisodes(widget.drama.id);
+      _isLoadingEpisodes = false;
+      if (mounted && liveEps.isNotEmpty) {
+        setState(() {
+          _episodes = liveEps;
+        });
+      }
+    }
+
+    if (_episodes.isEmpty) return;
+    final ep = _episodes[_currentEpisode.clamp(0, _episodes.length - 1)];
     final proxiedUrl = SmartStreamProxy.instance.getProxyUrl(ep.videoUrl);
 
     _videoController?.dispose();
@@ -99,8 +129,8 @@ class _ReelItemState extends State<_ReelItem> {
           _videoController?.setLooping(true);
 
           // Smart Preloader: Otomatis preload episode berikutnya di background
-          if (_currentEpisode + 1 < widget.drama.episodes.length) {
-            final nextEp = widget.drama.episodes[_currentEpisode + 1];
+          if (_currentEpisode + 1 < _episodes.length) {
+            final nextEp = _episodes[_currentEpisode + 1];
             SmartStreamProxy.instance.preloadNextEpisode(nextEp.videoUrl);
           }
         }
@@ -277,7 +307,10 @@ class _ReelItemState extends State<_ReelItem> {
                 onTap: () {
                   EpisodeDrawer.show(
                     context,
-                    drama: widget.drama,
+                    drama: widget.drama.copyWith(
+                      episodes: _episodes,
+                      totalEpisodes: _episodes.isNotEmpty ? _episodes.length : widget.drama.totalEpisodes,
+                    ),
                     currentEpisodeIndex: _currentEpisode,
                     onEpisodeSelected: (newIndex) {
                       setState(() {

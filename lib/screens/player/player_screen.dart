@@ -6,6 +6,7 @@ import '../../core/constants/app_assets.dart';
 import '../../core/player/smart_stream_proxy.dart';
 import '../../data/mock/mock_data.dart';
 import '../../data/models/drama_model.dart';
+import '../../data/services/shorttv_service.dart';
 import '../../widgets/drama_card.dart';
 import '../../widgets/episode_drawer.dart';
 
@@ -28,17 +29,31 @@ class _PlayerScreenState extends State<PlayerScreen> {
   VideoPlayerController? _controller;
   bool _showControls = true;
   bool _isLiked = false;
+  List<EpisodeModel> _episodes = [];
+  bool _isLoadingEpisodes = false;
 
   @override
   void initState() {
     super.initState();
     _currentEpisodeIndex = widget.initialEpisodeIndex;
+    _episodes = widget.drama.episodes;
     _setupVideo();
   }
 
-  void _setupVideo() {
-    if (widget.drama.episodes.isEmpty) return;
-    final ep = widget.drama.episodes[_currentEpisodeIndex];
+  Future<void> _setupVideo() async {
+    if (_episodes.isEmpty && !_isLoadingEpisodes) {
+      _isLoadingEpisodes = true;
+      final liveEps = await ShortTvService.instance.fetchShortTvEpisodes(widget.drama.id);
+      _isLoadingEpisodes = false;
+      if (mounted && liveEps.isNotEmpty) {
+        setState(() {
+          _episodes = liveEps;
+        });
+      }
+    }
+
+    if (_episodes.isEmpty) return;
+    final ep = _episodes[_currentEpisodeIndex.clamp(0, _episodes.length - 1)];
     final proxiedUrl = SmartStreamProxy.instance.getProxyUrl(ep.videoUrl);
 
     _controller?.dispose();
@@ -49,8 +64,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
           _controller?.play();
 
           // Preload episode berikutnya di latar belakang
-          if (_currentEpisodeIndex + 1 < widget.drama.episodes.length) {
-            final nextEp = widget.drama.episodes[_currentEpisodeIndex + 1];
+          if (_currentEpisodeIndex + 1 < _episodes.length) {
+            final nextEp = _episodes[_currentEpisodeIndex + 1];
             SmartStreamProxy.instance.preloadNextEpisode(nextEp.videoUrl);
           }
         }
@@ -310,7 +325,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
                             onTap: () {
                               EpisodeDrawer.show(
                                 context,
-                                drama: widget.drama,
+                                drama: widget.drama.copyWith(
+                                  episodes: _episodes,
+                                  totalEpisodes: _episodes.isNotEmpty ? _episodes.length : widget.drama.totalEpisodes,
+                                ),
                                 currentEpisodeIndex: _currentEpisodeIndex,
                                 onEpisodeSelected: _selectEpisode,
                               );
