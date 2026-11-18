@@ -4,6 +4,7 @@ import 'package:video_player/video_player.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_assets.dart';
+import '../../core/player/smart_stream_proxy.dart';
 import '../../data/mock/mock_data.dart';
 import '../../data/models/drama_model.dart';
 import '../../widgets/episode_drawer.dart';
@@ -87,13 +88,21 @@ class _ReelItemState extends State<_ReelItem> {
   void _initVideo() {
     if (widget.drama.episodes.isEmpty) return;
     final ep = widget.drama.episodes[_currentEpisode];
+    final proxiedUrl = SmartStreamProxy.instance.getProxyUrl(ep.videoUrl);
+
     _videoController?.dispose();
-    _videoController = VideoPlayerController.networkUrl(Uri.parse(ep.videoUrl))
+    _videoController = VideoPlayerController.networkUrl(Uri.parse(proxiedUrl))
       ..initialize().then((_) {
         if (mounted) {
           setState(() {});
           _videoController?.play();
           _videoController?.setLooping(true);
+
+          // Smart Preloader: Otomatis preload episode berikutnya di background
+          if (_currentEpisode + 1 < widget.drama.episodes.length) {
+            final nextEp = widget.drama.episodes[_currentEpisode + 1];
+            SmartStreamProxy.instance.preloadNextEpisode(nextEp.videoUrl);
+          }
         }
       });
   }

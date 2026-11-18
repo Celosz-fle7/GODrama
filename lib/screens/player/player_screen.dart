@@ -3,6 +3,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:video_player/video_player.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_assets.dart';
+import '../../core/player/smart_stream_proxy.dart';
 import '../../data/mock/mock_data.dart';
 import '../../data/models/drama_model.dart';
 import '../../widgets/drama_card.dart';
@@ -38,12 +39,20 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void _setupVideo() {
     if (widget.drama.episodes.isEmpty) return;
     final ep = widget.drama.episodes[_currentEpisodeIndex];
+    final proxiedUrl = SmartStreamProxy.instance.getProxyUrl(ep.videoUrl);
+
     _controller?.dispose();
-    _controller = VideoPlayerController.networkUrl(Uri.parse(ep.videoUrl))
+    _controller = VideoPlayerController.networkUrl(Uri.parse(proxiedUrl))
       ..initialize().then((_) {
         if (mounted) {
           setState(() {});
           _controller?.play();
+
+          // Preload episode berikutnya di latar belakang
+          if (_currentEpisodeIndex + 1 < widget.drama.episodes.length) {
+            final nextEp = widget.drama.episodes[_currentEpisodeIndex + 1];
+            SmartStreamProxy.instance.preloadNextEpisode(nextEp.videoUrl);
+          }
         }
       });
   }

@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'core/theme/app_theme.dart';
+import 'core/player/smart_stream_proxy.dart';
 import 'screens/main_shell.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Inisialisasi local stream proxy untuk video caching & smart preloading
+  await SmartStreamProxy.instance.start();
 
   // Edge to edge transparent system overlay
   SystemChrome.setSystemUIOverlayStyle(
