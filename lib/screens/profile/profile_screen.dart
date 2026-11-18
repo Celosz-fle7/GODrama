@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_assets.dart';
+import '../../data/services/update_service.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -129,9 +130,18 @@ class ProfileScreen extends StatelessWidget {
                   ),
                   const Divider(color: AppColors.divider, height: 1, indent: 52),
                   _buildMenuItem(
+                    icon: Icons.system_update_rounded,
+                    title: 'Periksa Pembaruan',
+                    subtitle: 'Versi v1.0.0 (Cek rilis terbaru)',
+                    onTap: () {
+                      UpdateService.instance.checkForUpdate(context, silent: false);
+                    },
+                  ),
+                  const Divider(color: AppColors.divider, height: 1, indent: 52),
+                  _buildMenuItem(
                     icon: Icons.info_outline_rounded,
-                    title: 'About GoDrama',
-                    subtitle: 'v1.0.0 (Clean Architecture Edition)',
+                    title: 'Tentang GoDrama',
+                    subtitle: 'v1.0.0 (Clean Architecture & Pure Protocol)',
                     onTap: () {},
                   ),
                 ],

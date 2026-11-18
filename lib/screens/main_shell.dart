@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../core/constants/app_colors.dart';
 import '../core/constants/app_assets.dart';
+import '../data/services/update_service.dart';
 import 'home/home_screen.dart';
 import 'for_you/for_you_screen.dart';
 import 'my_list/my_list_screen.dart';
@@ -16,6 +17,15 @@ class MainShell extends StatefulWidget {
 class _MainShellState extends State<MainShell> {
   // Buka pertama kali langsung ke tab For You (feed vertikal reel)
   int _currentIndex = 1;
+
+  @override
+  void initState() {
+    super.initState();
+    // Auto check update di awal saat aplikasi dibuka
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      UpdateService.instance.checkForUpdate(context, silent: true);
+    });
+  }
 
   final List<Widget> _pages = const [
     HomeScreen(),

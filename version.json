@@ -1,0 +1,8 @@
+{
+  "version_code": 1,
+  "version_name": "1.0.0",
+  "is_force_update": false,
+  "title": "Pembaruan Tersedia!",
+  "changelog": "- Tampilan awal otomatis membuka tab For You\n- Integrasi ShortTV streaming dengan ranking & sulih suara Indonesia\n- Pilihan resolusi video (1080p, 720p, 480p)\n- Pembersihan total konten mock bawaan\n- Sistem update otomatis mandiri",
+  "download_url": "https://github.com/Celosz-fle7/GODrama/releases/latest"
+}
