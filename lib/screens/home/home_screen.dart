@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_assets.dart';
 import '../../data/models/drama_model.dart';
@@ -80,7 +81,10 @@ class _HomeScreenState extends State<HomeScreen> {
               // Top App Bar / Search Bar
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                   child: Row(
                     children: [
                       // App Title / Logo
@@ -114,7 +118,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         onTap: () {
                           Navigator.push(
                             context,
-                            MaterialPageRoute(builder: (context) => const SearchScreen()),
+                            MaterialPageRoute(
+                              builder: (context) => const SearchScreen(),
+                            ),
                           );
                         },
                         child: Container(
@@ -127,7 +133,10 @@ class _HomeScreenState extends State<HomeScreen> {
                             AppAssets.icSearch,
                             width: 20,
                             height: 20,
-                            colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+                            colorFilter: const ColorFilter.mode(
+                              Colors.white,
+                              BlendMode.srcIn,
+                            ),
                           ),
                         ),
                       ),
@@ -170,12 +179,19 @@ class _HomeScreenState extends State<HomeScreen> {
                         },
                         child: Container(
                           margin: const EdgeInsets.only(right: 8),
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 8,
+                          ),
                           decoration: BoxDecoration(
-                            color: isSelected ? AppColors.primary : AppColors.surface,
+                            color: isSelected
+                                ? AppColors.primary
+                                : AppColors.surface,
                             borderRadius: BorderRadius.circular(18),
                             border: Border.all(
-                              color: isSelected ? AppColors.primary : AppColors.divider,
+                              color: isSelected
+                                  ? AppColors.primary
+                                  : AppColors.divider,
                               width: 0.8,
                             ),
                           ),
@@ -185,8 +201,12 @@ class _HomeScreenState extends State<HomeScreen> {
                               style: TextStyle(
                                 fontFamily: 'Urbanist',
                                 fontSize: 13,
-                                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                                color: isSelected ? Colors.white : AppColors.textSecondary,
+                                fontWeight: isSelected
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
+                                color: isSelected
+                                    ? Colors.white
+                                    : AppColors.textSecondary,
                               ),
                             ),
                           ),
@@ -245,14 +265,13 @@ class _HomeScreenState extends State<HomeScreen> {
                         onTap: () => _openPlayer(drama),
                       );
                     },
-                    childCount: dramas.length * 2, // repeat for realistic scroll
+                    childCount:
+                        dramas.length * 2, // repeat for realistic scroll
                   ),
                 ),
               ),
 
-              const SliverToBoxAdapter(
-                child: SizedBox(height: 32),
-              ),
+              const SliverToBoxAdapter(child: SizedBox(height: 32)),
             ],
           ),
         ),
@@ -264,10 +283,8 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => PlayerScreen(
-          drama: drama,
-          initialEpisodeIndex: 0,
-        ),
+        builder: (context) =>
+            PlayerScreen(drama: drama, initialEpisodeIndex: 0),
       ),
     );
   }

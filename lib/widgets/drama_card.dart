@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+
 import '../core/constants/app_colors.dart';
 import '../data/models/drama_model.dart';
 
@@ -37,12 +38,14 @@ class DramaCard extends StatelessWidget {
                       fit: BoxFit.cover,
                       width: double.infinity,
                       height: double.infinity,
-                      placeholder: (context, url) => Container(
-                        color: AppColors.shimmerBase,
-                      ),
+                      placeholder: (context, url) =>
+                          Container(color: AppColors.shimmerBase),
                       errorWidget: (context, url, error) => Container(
                         color: AppColors.surfaceLight,
-                        child: const Icon(Icons.broken_image, color: AppColors.textMuted),
+                        child: const Icon(
+                          Icons.broken_image,
+                          color: AppColors.textMuted,
+                        ),
                       ),
                     ),
                   ),
@@ -68,11 +71,17 @@ class DramaCard extends StatelessWidget {
                     top: 6,
                     right: 6,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.black.withOpacity(0.65),
                         borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: Colors.white.withOpacity(0.15), width: 0.5),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.15),
+                          width: 0.5,
+                        ),
                       ),
                       child: Text(
                         '${drama.totalEpisodes} Eps',
@@ -91,7 +100,11 @@ class DramaCard extends StatelessWidget {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 14),
+                        const Icon(
+                          Icons.play_arrow_rounded,
+                          color: Colors.white,
+                          size: 14,
+                        ),
                         const SizedBox(width: 2),
                         Text(
                           drama.viewCount,

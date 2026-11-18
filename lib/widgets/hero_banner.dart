@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+
 import '../core/constants/app_colors.dart';
 import '../data/models/drama_model.dart';
 
@@ -9,11 +10,7 @@ class HeroBanner extends StatefulWidget {
   final List<DramaModel> dramas;
   final Function(DramaModel drama) onDramaTap;
 
-  const HeroBanner({
-    super.key,
-    required this.dramas,
-    required this.onDramaTap,
-  });
+  const HeroBanner({super.key, required this.dramas, required this.onDramaTap});
 
   @override
   State<HeroBanner> createState() => _HeroBannerState();
@@ -54,8 +51,10 @@ class _HeroBannerState extends State<HeroBanner> {
                       CachedNetworkImage(
                         imageUrl: drama.bannerUrl,
                         fit: BoxFit.cover,
-                        placeholder: (context, url) => Container(color: AppColors.shimmerBase),
-                        errorWidget: (context, url, err) => Container(color: AppColors.surface),
+                        placeholder: (context, url) =>
+                            Container(color: AppColors.shimmerBase),
+                        errorWidget: (context, url, err) =>
+                            Container(color: AppColors.surface),
                       ),
                       // Gradient overlay
                       DecoratedBox(
@@ -86,9 +85,14 @@ class _HeroBannerState extends State<HeroBanner> {
                               spacing: 6,
                               children: drama.tags.take(3).map((tag) {
                                 return Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 3,
+                                  ),
                                   decoration: BoxDecoration(
-                                    color: AppColors.surfaceLight.withOpacity(0.85),
+                                    color: AppColors.surfaceLight.withOpacity(
+                                      0.85,
+                                    ),
                                     borderRadius: BorderRadius.circular(6),
                                   ),
                                   child: Text(
@@ -121,17 +125,27 @@ class _HeroBannerState extends State<HeroBanner> {
                             Row(
                               children: [
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 8,
+                                  ),
                                   decoration: BoxDecoration(
                                     gradient: const LinearGradient(
-                                      colors: [AppColors.primaryGradientStart, AppColors.primaryGradientEnd],
+                                      colors: [
+                                        AppColors.primaryGradientStart,
+                                        AppColors.primaryGradientEnd,
+                                      ],
                                     ),
                                     borderRadius: BorderRadius.circular(20),
                                   ),
                                   child: const Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Icon(Icons.play_arrow_rounded, color: Colors.white, size: 18),
+                                      Icon(
+                                        Icons.play_arrow_rounded,
+                                        color: Colors.white,
+                                        size: 18,
+                                      ),
                                       SizedBox(width: 4),
                                       Text(
                                         'Watch Now',

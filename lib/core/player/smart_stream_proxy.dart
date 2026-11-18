@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
+
 import 'package:path_provider/path_provider.dart';
 
 class SmartStreamProxy {
@@ -44,7 +45,10 @@ class SmartStreamProxy {
   }
 
   /// Preload awal video (2MB pertama) di background (mirip FlutterAliPlayerMediaLoader)
-  Future<void> preloadNextEpisode(String remoteUrl, {int preloadBytes = 2 * 1024 * 1024}) async {
+  Future<void> preloadNextEpisode(
+    String remoteUrl, {
+    int preloadBytes = 2 * 1024 * 1024,
+  }) async {
     if (_cacheDir == null) return;
     final cacheFile = _getCacheFile(remoteUrl);
     if (await cacheFile.exists() && await cacheFile.length() >= preloadBytes) {
@@ -52,7 +56,8 @@ class SmartStreamProxy {
     }
 
     try {
-      final client = HttpClient()..connectionTimeout = const Duration(seconds: 5);
+      final client = HttpClient()
+        ..connectionTimeout = const Duration(seconds: 5);
       final request = await client.getUrl(Uri.parse(remoteUrl));
       request.headers.set('Range', 'bytes=0-$preloadBytes');
 
@@ -82,7 +87,8 @@ class SmartStreamProxy {
     final cacheFile = _getCacheFile(remoteUrlParam);
 
     try {
-      final client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
+      final client = HttpClient()
+        ..connectionTimeout = const Duration(seconds: 8);
       final clientReq = await client.getUrl(remoteUri);
 
       // Teruskan Range header dari player
@@ -108,5 +114,35 @@ class SmartStreamProxy {
         await request.response.close();
       } catch (_) {}
     }
+  }
+
+  /// Menghitung total ukuran file cache video dalam bytes
+  Future<int> getCacheSize() async {
+    if (_cacheDir == null || !await _cacheDir!.exists()) return 0;
+    try {
+      int total = 0;
+      final entities = _cacheDir!.listSync(recursive: true, followLinks: false);
+      for (final entity in entities) {
+        if (entity is File) {
+          total += await entity.length();
+        }
+      }
+      return total;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  /// Menghapus seluruh file video cache di disk
+  Future<void> clearCache() async {
+    if (_cacheDir == null || !await _cacheDir!.exists()) return;
+    try {
+      final entities = _cacheDir!.listSync();
+      for (final entity in entities) {
+        if (entity is File) {
+          await entity.delete();
+        }
+      }
+    } catch (_) {}
   }
 }

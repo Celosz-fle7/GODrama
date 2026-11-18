@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+
 import 'package:crypto/crypto.dart';
+
 import '../models/drama_model.dart';
 
 class ShortTvService {
@@ -13,7 +15,9 @@ class ShortTvService {
   }
 
   static const String _baseUrl = 'https://api4sg.aoneroom.com';
-  static final List<int> _gatewaySecret = base64.decode('76iRl07s0xSN9jqmEWAt79EBJZulIQIsV64FZr2O');
+  static final List<int> _gatewaySecret = base64.decode(
+    '76iRl07s0xSN9jqmEWAt79EBJZulIQIsV64FZr2O',
+  );
   static const String _userAgent =
       'com.community.oneroom/50020132 (Linux; U; Android 16; id_ID; Infinix X6870; Build/BP2A.250605.031.A3; Cronet/155.0.8059.16)';
 
@@ -64,7 +68,13 @@ class ShortTvService {
   }) {
     final cl = body.isNotEmpty ? utf8.encode(body).length.toString() : '';
     final bodyMd5 = body.isNotEmpty
-        ? md5.convert(utf8.encode(body.length > 102400 ? body.substring(0, 102400) : body)).toString()
+        ? md5
+              .convert(
+                utf8.encode(
+                  body.length > 102400 ? body.substring(0, 102400) : body,
+                ),
+              )
+              .toString()
         : '';
     final formattedPath = _formatPathQuery(pathWithQuery);
 
@@ -91,11 +101,20 @@ class ShortTvService {
 
     try {
       final ts = DateTime.now().millisecondsSinceEpoch.toString();
-      final sig = _generateSignature('GET', '/wefeed-mobile-bff/app/config', ts: ts);
-      final revTsMd5 = md5.convert(utf8.encode(ts.split('').reversed.join(''))).toString();
+      final sig = _generateSignature(
+        'GET',
+        '/wefeed-mobile-bff/app/config',
+        ts: ts,
+      );
+      final revTsMd5 = md5
+          .convert(utf8.encode(ts.split('').reversed.join('')))
+          .toString();
 
-      final client = HttpClient()..connectionTimeout = const Duration(seconds: 10);
-      final request = await client.getUrl(Uri.parse('$_baseUrl/wefeed-mobile-bff/app/config'));
+      final client = HttpClient()
+        ..connectionTimeout = const Duration(seconds: 10);
+      final request = await client.getUrl(
+        Uri.parse('$_baseUrl/wefeed-mobile-bff/app/config'),
+      );
 
       request.headers.set('User-Agent', _userAgent);
       request.headers.set('accept', '*/*');
@@ -140,12 +159,21 @@ class ShortTvService {
     final ts = DateTime.now().millisecondsSinceEpoch.toString();
     final bodyStr = bodyJson != null ? jsonEncode(bodyJson) : '';
     final contentType = bodyJson != null ? 'application/json' : '';
-    final sig = _generateSignature(method, pathWithQuery, body: bodyStr, contentType: contentType, ts: ts);
+    final sig = _generateSignature(
+      method,
+      pathWithQuery,
+      body: bodyStr,
+      contentType: contentType,
+      ts: ts,
+    );
 
     try {
-      final client = HttpClient()..connectionTimeout = const Duration(seconds: 12);
+      final client = HttpClient()
+        ..connectionTimeout = const Duration(seconds: 12);
       final uri = Uri.parse('$_baseUrl$pathWithQuery');
-      final request = await (method == 'POST' ? client.postUrl(uri) : client.getUrl(uri));
+      final request = await (method == 'POST'
+          ? client.postUrl(uri)
+          : client.getUrl(uri));
 
       request.headers.set('User-Agent', _userAgent);
       request.headers.set('accept', '*/*');
@@ -204,8 +232,13 @@ class ShortTvService {
 
     // 1. Ambil tangga operasional Tab 13 (Sedang Trending & Sulih Suara terhangat hari ini)
     try {
-      final tabResp = await _request('GET', '/wefeed-mobile-bff/tab-operating?tabId=13');
-      if (tabResp != null && tabResp['code'] == 0 && tabResp['data'] is Map<String, dynamic>) {
+      final tabResp = await _request(
+        'GET',
+        '/wefeed-mobile-bff/tab-operating?tabId=13',
+      );
+      if (tabResp != null &&
+          tabResp['code'] == 0 &&
+          tabResp['data'] is Map<String, dynamic>) {
         final sections = tabResp['data']['items'] as List?;
         if (sections != null) {
           for (final sec in sections) {
@@ -268,78 +301,109 @@ class ShortTvService {
       payload['sort'] = sort;
     }
 
-    final resp = await _request('POST', '/wefeed-mobile-bff/subject-api/list', bodyJson: payload);
-    if (resp != null && resp['code'] == 0 && resp['data'] is Map<String, dynamic>) {
+    final resp = await _request(
+      'POST',
+      '/wefeed-mobile-bff/subject-api/list',
+      bodyJson: payload,
+    );
+    if (resp != null &&
+        resp['code'] == 0 &&
+        resp['data'] is Map<String, dynamic>) {
       final items = resp['data']['items'] as List?;
       if (items != null) {
-        return items.whereType<Map<String, dynamic>>().map(_mapToDramaModel).toList();
+        return items
+            .whereType<Map<String, dynamic>>()
+            .map(_mapToDramaModel)
+            .toList();
       }
     }
     return [];
   }
 
   /// Ambil daftar episode dan CloudFront Signed MP4 stream ShortTV lengkap dengan multi-resolusi & subtitle
-  Future<List<EpisodeModel>> fetchShortTvEpisodes(String subjectId, {int startPos = 1, int endPos = 30}) async {
+  Future<List<EpisodeModel>> fetchShortTvEpisodes(
+    String subjectId, {
+    int startPos = 1,
+    int endPos = 30,
+  }) async {
     final safeEnd = (endPos - startPos >= 30) ? (startPos + 29) : endPos;
-    final path = '/wefeed-mobile-bff/shorts/mini-list?endPosition=$safeEnd&pagerMode=1&startPosition=$startPos&subjectId=$subjectId';
+    final path =
+        '/wefeed-mobile-bff/shorts/mini-list?endPosition=$safeEnd&pagerMode=1&startPosition=$startPos&subjectId=$subjectId';
 
     final resp = await _request('GET', path);
-    if (resp != null && resp['code'] == 0 && resp['data'] is Map<String, dynamic>) {
+    if (resp != null &&
+        resp['code'] == 0 &&
+        resp['data'] is Map<String, dynamic>) {
       final items = resp['data']['items'] as List?;
       if (items != null) {
-        return items.whereType<Map<String, dynamic>>().map((it) {
-          final epNum = (it['ep'] as num?)?.toInt() ?? 1;
-          final vidObj = it['video'] as Map<String, dynamic>?;
-          final addrObj = vidObj?['videoAddress'] as Map<String, dynamic>?;
-          final streamUrl = addrObj?['url']?.toString() ?? '';
+        return items
+            .whereType<Map<String, dynamic>>()
+            .map((it) {
+              final epNum = (it['ep'] as num?)?.toInt() ?? 1;
+              final vidObj = it['video'] as Map<String, dynamic>?;
+              final addrObj = vidObj?['videoAddress'] as Map<String, dynamic>?;
+              final streamUrl = addrObj?['url']?.toString() ?? '';
 
-          // Ekstraksi seluruh pilihan resolusi (1080p, 720p, 480p)
-          final resMap = <String, String>{};
-          final addrList = vidObj?['addressList'] as List?;
-          if (addrList != null) {
-            for (final a in addrList) {
-              final r = a['resolution']?.toString() ?? '720';
-              final u = a['url']?.toString() ?? '';
-              if (u.isNotEmpty) {
-                resMap['${r}p'] = u;
+              // Ekstraksi seluruh pilihan resolusi (1080p, 720p, 480p)
+              final resMap = <String, String>{};
+              final addrList = vidObj?['addressList'] as List?;
+              if (addrList != null) {
+                for (final a in addrList) {
+                  final r = a['resolution']?.toString() ?? '720';
+                  final u = a['url']?.toString() ?? '';
+                  if (u.isNotEmpty) {
+                    resMap['${r}p'] = u;
+                  }
+                }
               }
-            }
-          }
-          if (resMap.isEmpty && streamUrl.isNotEmpty) {
-            final defaultRes = addrObj?['resolution']?.toString() ?? '720';
-            resMap['${defaultRes}p'] = streamUrl;
-          }
+              if (resMap.isEmpty && streamUrl.isNotEmpty) {
+                final defaultRes = addrObj?['resolution']?.toString() ?? '720';
+                resMap['${defaultRes}p'] = streamUrl;
+              }
 
-          return EpisodeModel(
-            id: it['miniId']?.toString() ?? '${subjectId}_$epNum',
-            episodeNumber: epNum,
-            title: 'Episode $epNum',
-            videoUrl: streamUrl,
-            durationSeconds: (addrObj?['duration'] as num?)?.toInt() ?? 90,
-            isUnlocked: true,
-            resolutions: resMap,
-          );
-        }).where((ep) => ep.videoUrl.isNotEmpty).toList();
+              return EpisodeModel(
+                id: it['miniId']?.toString() ?? '${subjectId}_$epNum',
+                episodeNumber: epNum,
+                title: 'Episode $epNum',
+                videoUrl: streamUrl,
+                durationSeconds: (addrObj?['duration'] as num?)?.toInt() ?? 90,
+                isUnlocked: true,
+                resolutions: resMap,
+              );
+            })
+            .where((ep) => ep.videoUrl.isNotEmpty)
+            .toList();
       }
     }
     return [];
   }
 
   /// Cari drama ShortTV
-  Future<List<DramaModel>> searchShortTv(String keyword, {int page = 1, int perPage = 10}) async {
-    final payload = {
-      'keyword': keyword,
-      'page': page,
-      'perPage': perPage,
-    };
+  Future<List<DramaModel>> searchShortTv(
+    String keyword, {
+    int page = 1,
+    int perPage = 10,
+  }) async {
+    final payload = {'keyword': keyword, 'page': page, 'perPage': perPage};
 
-    final resp = await _request('POST', '/wefeed-mobile-bff/subject-api/search', bodyJson: payload);
-    if (resp != null && resp['code'] == 0 && resp['data'] is Map<String, dynamic>) {
+    final resp = await _request(
+      'POST',
+      '/wefeed-mobile-bff/subject-api/search',
+      bodyJson: payload,
+    );
+    if (resp != null &&
+        resp['code'] == 0 &&
+        resp['data'] is Map<String, dynamic>) {
       final items = resp['data']['items'] as List?;
       if (items != null) {
         return items
             .whereType<Map<String, dynamic>>()
-            .where((it) => it['subjectType'] == 7 || it['genre']?.toString().toLowerCase().contains('short') == true)
+            .where(
+              (it) =>
+                  it['subjectType'] == 7 ||
+                  it['genre']?.toString().toLowerCase().contains('short') ==
+                      true,
+            )
             .map(_mapToDramaModel)
             .toList();
       }
@@ -354,7 +418,10 @@ class ShortTvService {
     final coverUrl = coverObj?['url']?.toString() ?? '';
     final bannerObj = raw['banner'] as Map<String, dynamic>?;
     final bannerUrl = bannerObj?['url']?.toString() ?? coverUrl;
-    final desc = raw['description']?.toString() ?? raw['brief']?.toString() ?? 'ShortTV Drama Series';
+    final desc =
+        raw['description']?.toString() ??
+        raw['brief']?.toString() ??
+        'ShortTV Drama Series';
 
     // Tags
     final tagsList = <String>[];
@@ -364,14 +431,18 @@ class ShortTvService {
     }
     if (tagsList.isEmpty) tagsList.add('ShortTV');
 
-    final eps = (raw['shortsEpisode'] as num?)?.toInt() ??
+    final eps =
+        (raw['shortsEpisode'] as num?)?.toInt() ??
         (raw['totalEpisodes'] as num?)?.toInt() ??
         (raw['episodesCount'] as num?)?.toInt() ??
         40;
 
     final viewersRaw = raw['viewers']?.toString() ?? '';
-    final viewCount = viewersRaw.isNotEmpty ? viewersRaw : '${(Random().nextInt(15) + 3)}.${Random().nextInt(9)}M';
-    final rateVal = (raw['rate'] as num?)?.toDouble() ??
+    final viewCount = viewersRaw.isNotEmpty
+        ? viewersRaw
+        : '${(Random().nextInt(15) + 3)}.${Random().nextInt(9)}M';
+    final rateVal =
+        (raw['rate'] as num?)?.toDouble() ??
         (raw['imdbRate'] as num?)?.toDouble() ??
         4.8;
 

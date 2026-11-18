@@ -45,23 +45,24 @@ jobs:
       - name: Rename APK Artifact
         run: |
           mkdir -p output
-          cp build/app/outputs/flutter-apk/app-release.apk output/GoDrama-v1.0.0-release.apk
+          VERSION="${GITHUB_REF_NAME:-v1.0.1}"
+          cp build/app/outputs/flutter-apk/app-release.apk "output/GoDrama-${VERSION}-release.apk"
+          cp build/app/outputs/flutter-apk/app-release.apk output/GoDrama-release.apk
           ls -lh output/
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: GoDrama-v1.0.0-release-apk
-          path: output/GoDrama-v1.0.0-release.apk
+          name: GoDrama-release-apk
+          path: output/*.apk
           retention-days: 14
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
         with:
-          files: output/GoDrama-v1.0.0-release.apk
-          tag_name: v1.0.0
-          name: GoDrama Release v1.0.0
+          files: output/*.apk
+          name: GoDrama Release ${{ github.ref_name }}
           draft: false
           prerelease: false
           generate_release_notes: true

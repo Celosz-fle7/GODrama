@@ -69,7 +69,9 @@ class DohResolver {
       final request = await _client.getUrl(uri);
       request.headers.set('Accept', 'application/dns-json');
 
-      final response = await request.close().timeout(const Duration(seconds: 3));
+      final response = await request.close().timeout(
+        const Duration(seconds: 3),
+      );
       if (response.statusCode == 200) {
         final body = await response.transform(utf8.decoder).join();
         final json = jsonDecode(body) as Map<String, dynamic>;

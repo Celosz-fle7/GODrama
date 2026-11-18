@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_assets.dart';
 import '../../data/models/drama_model.dart';
@@ -84,7 +85,10 @@ class _SearchScreenState extends State<SearchScreen> {
                       decoration: BoxDecoration(
                         color: AppColors.surface,
                         borderRadius: BorderRadius.circular(22),
-                        border: Border.all(color: AppColors.divider, width: 0.8),
+                        border: Border.all(
+                          color: AppColors.divider,
+                          width: 0.8,
+                        ),
                       ),
                       child: TextField(
                         controller: _searchController,
@@ -105,12 +109,19 @@ class _SearchScreenState extends State<SearchScreen> {
                             padding: const EdgeInsets.all(12),
                             child: SvgPicture.asset(
                               AppAssets.icSearch,
-                              colorFilter: const ColorFilter.mode(AppColors.textSecondary, BlendMode.srcIn),
+                              colorFilter: const ColorFilter.mode(
+                                AppColors.textSecondary,
+                                BlendMode.srcIn,
+                              ),
                             ),
                           ),
                           suffixIcon: _searchController.text.isNotEmpty
                               ? IconButton(
-                                  icon: const Icon(Icons.clear_rounded, color: AppColors.textSecondary, size: 18),
+                                  icon: const Icon(
+                                    Icons.clear_rounded,
+                                    color: AppColors.textSecondary,
+                                    size: 18,
+                                  ),
                                   onPressed: () {
                                     _searchController.clear();
                                     _onSearch('');
@@ -118,7 +129,9 @@ class _SearchScreenState extends State<SearchScreen> {
                                 )
                               : null,
                           border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: 10,
+                          ),
                         ),
                       ),
                     ),
@@ -142,7 +155,9 @@ class _SearchScreenState extends State<SearchScreen> {
 
             // Content Area
             Expanded(
-              child: _isSearching ? _buildSearchResults() : _buildTrendingList(),
+              child: _isSearching
+                  ? _buildSearchResults()
+                  : _buildTrendingList(),
             ),
           ],
         ),
@@ -175,7 +190,10 @@ class _SearchScreenState extends State<SearchScreen> {
                 _onSearch(tag);
               },
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.surface,
                   borderRadius: BorderRadius.circular(20),
@@ -213,7 +231,9 @@ class _SearchScreenState extends State<SearchScreen> {
             onTap: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => PlayerScreen(drama: drama)),
+                MaterialPageRoute(
+                  builder: (context) => PlayerScreen(drama: drama),
+                ),
               );
             },
             child: Container(
@@ -267,7 +287,10 @@ class _SearchScreenState extends State<SearchScreen> {
                       ],
                     ),
                   ),
-                  const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    color: AppColors.textMuted,
+                  ),
                 ],
               ),
             ),
@@ -283,7 +306,11 @@ class _SearchScreenState extends State<SearchScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.search_off_rounded, color: AppColors.textMuted, size: 48),
+            Icon(
+              Icons.search_off_rounded,
+              color: AppColors.textMuted,
+              size: 48,
+            ),
             SizedBox(height: 12),
             Text(
               'No results found',
@@ -315,7 +342,9 @@ class _SearchScreenState extends State<SearchScreen> {
           onTap: () {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => PlayerScreen(drama: drama)),
+              MaterialPageRoute(
+                builder: (context) => PlayerScreen(drama: drama),
+              ),
             );
           },
         );

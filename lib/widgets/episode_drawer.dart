@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
+
 import '../core/constants/app_colors.dart';
 import '../core/constants/app_assets.dart';
 import '../data/models/drama_model.dart';
@@ -102,7 +103,10 @@ class _EpisodeDrawerState extends State<EpisodeDrawer> {
                   ],
                 ),
                 IconButton(
-                  icon: const Icon(Icons.close_rounded, color: AppColors.textSecondary),
+                  icon: const Icon(
+                    Icons.close_rounded,
+                    color: AppColors.textSecondary,
+                  ),
                   onPressed: () => Navigator.pop(context),
                 ),
               ],
@@ -118,7 +122,10 @@ class _EpisodeDrawerState extends State<EpisodeDrawer> {
                 itemCount: totalRanges,
                 itemBuilder: (context, rangeIdx) {
                   final start = rangeIdx * _rangeSize + 1;
-                  final end = ((rangeIdx + 1) * _rangeSize).clamp(1, totalEpisodes);
+                  final end = ((rangeIdx + 1) * _rangeSize).clamp(
+                    1,
+                    totalEpisodes,
+                  );
                   final isSelected = rangeIdx == _selectedRangeIndex;
 
                   return GestureDetector(
@@ -129,9 +136,14 @@ class _EpisodeDrawerState extends State<EpisodeDrawer> {
                     },
                     child: Container(
                       margin: const EdgeInsets.only(right: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
-                        color: isSelected ? AppColors.primary : AppColors.surfaceLight,
+                        color: isSelected
+                            ? AppColors.primary
+                            : AppColors.surfaceLight,
                         borderRadius: BorderRadius.circular(18),
                       ),
                       child: Center(
@@ -140,8 +152,12 @@ class _EpisodeDrawerState extends State<EpisodeDrawer> {
                           style: TextStyle(
                             fontFamily: 'Urbanist',
                             fontSize: 12,
-                            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                            color: isSelected ? Colors.white : AppColors.textSecondary,
+                            fontWeight: isSelected
+                                ? FontWeight.w700
+                                : FontWeight.w500,
+                            color: isSelected
+                                ? Colors.white
+                                : AppColors.textSecondary,
                           ),
                         ),
                       ),
@@ -156,7 +172,10 @@ class _EpisodeDrawerState extends State<EpisodeDrawer> {
             child: Builder(
               builder: (context) {
                 final startIndex = _selectedRangeIndex * _rangeSize;
-                final endIndex = (startIndex + _rangeSize).clamp(0, totalEpisodes);
+                final endIndex = (startIndex + _rangeSize).clamp(
+                  0,
+                  totalEpisodes,
+                );
                 final rangeCount = endIndex - startIndex;
 
                 return GridView.builder(
@@ -171,7 +190,8 @@ class _EpisodeDrawerState extends State<EpisodeDrawer> {
                   itemBuilder: (context, idx) {
                     final episodeIndex = startIndex + idx;
                     final epNum = episodeIndex + 1;
-                    final isPlaying = episodeIndex == widget.currentEpisodeIndex;
+                    final isPlaying =
+                        episodeIndex == widget.currentEpisodeIndex;
 
                     return GestureDetector(
                       onTap: () {
@@ -185,7 +205,9 @@ class _EpisodeDrawerState extends State<EpisodeDrawer> {
                               : AppColors.surfaceLight,
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
-                            color: isPlaying ? AppColors.primary : Colors.transparent,
+                            color: isPlaying
+                                ? AppColors.primary
+                                : Colors.transparent,
                             width: 1.5,
                           ),
                         ),
@@ -196,8 +218,13 @@ class _EpisodeDrawerState extends State<EpisodeDrawer> {
                                   height: 22,
                                   child: Lottie.asset(
                                     AppAssets.animSeriesPlaying,
-                                    errorBuilder: (context, error, stackTrace) =>
-                                        const Icon(Icons.equalizer, color: AppColors.primary, size: 18),
+                                    errorBuilder:
+                                        (context, error, stackTrace) =>
+                                            const Icon(
+                                              Icons.equalizer,
+                                              color: AppColors.primary,
+                                              size: 18,
+                                            ),
                                   ),
                                 )
                               : Text(

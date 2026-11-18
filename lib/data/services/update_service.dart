@@ -1,4 +1,5 @@
 import 'dart:io';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -27,7 +28,9 @@ class UpdateInfo {
       isForceUpdate: json['is_force_update'] ?? false,
       title: json['title'] ?? 'Pembaruan Tersedia!',
       changelog: json['changelog'] ?? 'Peningkatan performa dan perbaikan bug.',
-      downloadUrl: json['download_url'] ?? 'https://github.com/Celosz-fle7/GODrama/releases/latest',
+      downloadUrl:
+          json['download_url'] ??
+          'https://github.com/Celosz-fle7/GODrama/releases/latest',
     );
   }
 }
@@ -41,16 +44,21 @@ class UpdateService {
   static const String versionCheckUrl =
       "https://raw.githubusercontent.com/Celosz-fle7/GODrama/main/version.json";
 
-  final Dio _dio = Dio(BaseOptions(
-    connectTimeout: const Duration(seconds: 8),
-    receiveTimeout: const Duration(seconds: 8),
-  ));
+  final Dio _dio = Dio(
+    BaseOptions(
+      connectTimeout: const Duration(seconds: 8),
+      receiveTimeout: const Duration(seconds: 8),
+    ),
+  );
 
   bool _dialogShowing = false;
 
   /// Memeriksa pembaruan aplikasi.
   /// Jika [silent] bernilai true, tidak akan memunculkan dialog/snackbar jika tidak ada pembaruan.
-  Future<void> checkForUpdate(BuildContext context, {bool silent = true}) async {
+  Future<void> checkForUpdate(
+    BuildContext context, {
+    bool silent = true,
+  }) async {
     try {
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final response = await _dio.get(
@@ -112,13 +120,19 @@ class UpdateService {
           onWillPop: () async => !updateInfo.isForceUpdate,
           child: Dialog(
             backgroundColor: Colors.transparent,
-            insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+            insetPadding: const EdgeInsets.symmetric(
+              horizontal: 24,
+              vertical: 24,
+            ),
             child: Container(
               padding: const EdgeInsets.all(22),
               decoration: BoxDecoration(
                 color: const Color(0xFF1A1D27),
                 borderRadius: BorderRadius.circular(22),
-                border: Border.all(color: Colors.white.withOpacity(0.08), width: 1),
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.08),
+                  width: 1,
+                ),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.6),
@@ -176,7 +190,10 @@ class UpdateService {
                   const SizedBox(height: 6),
                   Center(
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: const Color(0xFFFF3366).withOpacity(0.15),
                         borderRadius: BorderRadius.circular(12),
@@ -252,7 +269,10 @@ class UpdateService {
                       onPressed: () async {
                         final uri = Uri.parse(updateInfo.downloadUrl);
                         if (await canLaunchUrl(uri)) {
-                          await launchUrl(uri, mode: LaunchMode.externalApplication);
+                          await launchUrl(
+                            uri,
+                            mode: LaunchMode.externalApplication,
+                          );
                         }
                       },
                       style: ElevatedButton.styleFrom(
@@ -266,7 +286,11 @@ class UpdateService {
                       child: const Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.download_rounded, color: Colors.white, size: 20),
+                          Icon(
+                            Icons.download_rounded,
+                            color: Colors.white,
+                            size: 20,
+                          ),
                           SizedBox(width: 8),
                           Text(
                             'Perbarui Sekarang',

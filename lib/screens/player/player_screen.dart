@@ -1,11 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:video_player/video_player.dart';
+
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_assets.dart';
 import '../../core/player/smart_stream_proxy.dart';
 import '../../data/models/drama_model.dart';
 import '../../data/services/shorttv_service.dart';
+import '../../data/services/app_settings_service.dart';
 import '../../widgets/drama_card.dart';
 import '../../widgets/episode_drawer.dart';
 
@@ -27,27 +32,55 @@ class _PlayerScreenState extends State<PlayerScreen> {
   late int _currentEpisodeIndex;
   VideoPlayerController? _controller;
   bool _showControls = true;
-  bool _isLiked = false;
   List<EpisodeModel> _episodes = [];
   bool _isLoadingEpisodes = false;
   String _selectedQuality = '1080p';
   bool _subtitlesEnabled = true;
+  String _subtitleLanguage = 'Bahasa Indonesia';
+  double _playbackSpeed = 1.0;
   List<DramaModel> _recommendedDramas = [];
+
+  // Scrubber state
+  bool _isDraggingScrubber = false;
+  double _scrubberValue = 0.0;
+  Timer? _controlsTimer;
+  Timer? _positionTimer;
 
   @override
   void initState() {
     super.initState();
     _currentEpisodeIndex = widget.initialEpisodeIndex;
+    _selectedQuality = AppSettingsService.instance.defaultQuality;
+    _subtitlesEnabled = AppSettingsService.instance.subtitlesEnabled;
     _episodes = widget.drama.episodes;
     _setupVideo();
     _loadRecommendations();
+    _resetControlsTimer();
+  }
+
+  void _resetControlsTimer() {
+    _controlsTimer?.cancel();
+    if (_showControls) {
+      _controlsTimer = Timer(const Duration(seconds: 4), () {
+        if (mounted && _controller?.value.isPlaying == true) {
+          setState(() {
+            _showControls = false;
+          });
+        }
+      });
+    }
   }
 
   Future<void> _loadRecommendations() async {
-    final live = await ShortTvService.instance.fetchShortTvDramas(page: 1, perPage: 10);
+    final live = await ShortTvService.instance.fetchShortTvDramas(
+      page: 1,
+      perPage: 10,
+    );
     if (mounted && live.isNotEmpty) {
       setState(() {
-        _recommendedDramas = live.where((d) => d.id != widget.drama.id).toList();
+        _recommendedDramas = live
+            .where((d) => d.id != widget.drama.id)
+            .toList();
       });
     }
   }
@@ -55,7 +88,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Future<void> _setupVideo() async {
     if (_episodes.isEmpty && !_isLoadingEpisodes) {
       _isLoadingEpisodes = true;
-      final liveEps = await ShortTvService.instance.fetchShortTvEpisodes(widget.drama.id);
+      final liveEps = await ShortTvService.instance.fetchShortTvEpisodes(
+        widget.drama.id,
+      );
       _isLoadingEpisodes = false;
       if (mounted && liveEps.isNotEmpty) {
         setState(() {
@@ -67,19 +102,37 @@ class _PlayerScreenState extends State<PlayerScreen> {
     if (_episodes.isEmpty) return;
     final ep = _episodes[_currentEpisodeIndex.clamp(0, _episodes.length - 1)];
 
-    // Pilih resolusi yang tersedia di episode
-    if (!ep.resolutions.containsKey(_selectedQuality) && ep.resolutions.isNotEmpty) {
+    // Catat ke riwayat tontonan
+    AppSettingsService.instance.addToWatchHistory(widget.drama);
+
+    if (!ep.resolutions.containsKey(_selectedQuality) &&
+        ep.resolutions.isNotEmpty) {
       _selectedQuality = ep.resolutions.keys.first;
     }
     final rawStreamUrl = ep.getUrlForQuality(_selectedQuality);
     final proxiedUrl = SmartStreamProxy.instance.getProxyUrl(rawStreamUrl);
 
+    _positionTimer?.cancel();
     _controller?.dispose();
     _controller = VideoPlayerController.networkUrl(Uri.parse(proxiedUrl))
       ..initialize().then((_) {
         if (mounted) {
-          setState(() {});
+          _controller?.setPlaybackSpeed(_playbackSpeed);
           _controller?.play();
+          setState(() {});
+
+          // Monitor posisi secara berkala
+          _positionTimer = Timer.periodic(const Duration(milliseconds: 250), (
+            _,
+          ) {
+            if (mounted &&
+                _controller != null &&
+                _controller!.value.isInitialized) {
+              if (!_isDraggingScrubber) {
+                setState(() {});
+              }
+            }
+          });
 
           // Preload episode berikutnya di latar belakang
           if (_currentEpisodeIndex + 1 < _episodes.length) {
@@ -90,53 +143,87 @@ class _PlayerScreenState extends State<PlayerScreen> {
       });
   }
 
-  void _changeQuality(String quality) async {
+  void _changeQuality(String quality) {
     if (_selectedQuality == quality || _controller == null) return;
     final currentPos = _controller!.value.position;
     setState(() {
       _selectedQuality = quality;
     });
 
-    final ep = _episodes[_currentEpisodeIndex];
+    final ep = _episodes[_currentEpisodeIndex.clamp(0, _episodes.length - 1)];
     final newUrl = ep.getUrlForQuality(quality);
     final proxiedUrl = SmartStreamProxy.instance.getProxyUrl(newUrl);
 
+    _positionTimer?.cancel();
     _controller?.dispose();
     _controller = VideoPlayerController.networkUrl(Uri.parse(proxiedUrl))
       ..initialize().then((_) {
         if (mounted) {
           _controller?.seekTo(currentPos);
+          _controller?.setPlaybackSpeed(_playbackSpeed);
           _controller?.play();
           setState(() {});
+
+          _positionTimer = Timer.periodic(const Duration(milliseconds: 250), (
+            _,
+          ) {
+            if (mounted && !_isDraggingScrubber) {
+              setState(() {});
+            }
+          });
         }
       });
   }
 
+  void _changeSpeed(double speed) {
+    setState(() {
+      _playbackSpeed = speed;
+    });
+    _controller?.setPlaybackSpeed(speed);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        duration: const Duration(milliseconds: 800),
+        backgroundColor: const Color(0xFF1E232E),
+        content: Text('Kecepatan video: ${speed}x'),
+      ),
+    );
+  }
+
   @override
   void dispose() {
+    _controlsTimer?.cancel();
+    _positionTimer?.cancel();
     _controller?.dispose();
     super.dispose();
   }
 
   void _selectEpisode(int index) {
+    if (index == _currentEpisodeIndex) return;
     setState(() {
       _currentEpisodeIndex = index;
     });
     _setupVideo();
   }
 
+  String _formatDuration(Duration d) {
+    final minutes = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final seconds = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$minutes:$seconds';
+  }
+
   @override
   Widget build(BuildContext context) {
-    final ep = widget.drama.episodes.isNotEmpty
-        ? widget.drama.episodes[_currentEpisodeIndex]
-        : null;
+    final isFav = AppSettingsService.instance.isFavorite(widget.drama.id);
+    final totalEps = _episodes.isNotEmpty
+        ? _episodes.length
+        : widget.drama.totalEpisodes;
 
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
         child: Column(
           children: [
-            // Video Player Area
+            // Video Player Container
             AspectRatio(
               aspectRatio: 16 / 9,
               child: Stack(
@@ -152,15 +239,48 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     )
                   else
                     const Center(
-                      child: CircularProgressIndicator(color: AppColors.primary),
+                      child: CircularProgressIndicator(
+                        color: AppColors.primary,
+                      ),
                     ),
 
-                  // Tap gesture for controls
+                  // Subtitle Overlay pada Player
+                  if (_subtitlesEnabled &&
+                      _controller != null &&
+                      _controller!.value.isInitialized)
+                    Positioned(
+                      bottom: _showControls ? 56 : 14,
+                      left: 20,
+                      right: 20,
+                      child: Center(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.75),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            '[$_subtitleLanguage - Sulih Suara Resmi]',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                  // Tap gesture untuk toggle tampilan kontrol
                   GestureDetector(
                     onTap: () {
                       setState(() {
                         _showControls = !_showControls;
                       });
+                      _resetControlsTimer();
                     },
                     child: Container(color: Colors.transparent),
                   ),
@@ -173,18 +293,28 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       left: 0,
                       right: 0,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
-                            colors: [Colors.black.withOpacity(0.7), Colors.transparent],
+                            colors: [
+                              Colors.black.withOpacity(0.75),
+                              Colors.transparent,
+                            ],
                           ),
                         ),
                         child: Row(
                           children: [
                             IconButton(
-                              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
+                              icon: const Icon(
+                                Icons.arrow_back_ios_new_rounded,
+                                color: Colors.white,
+                                size: 20,
+                              ),
                               onPressed: () => Navigator.pop(context),
                             ),
                             Expanded(
@@ -201,25 +331,59 @@ class _PlayerScreenState extends State<PlayerScreen> {
                               ),
                             ),
                             // Subtitle Toggle Button
-                            GestureDetector(
-                              onTap: () {
-                                setState(() => _subtitlesEnabled = !_subtitlesEnabled);
+                            IconButton(
+                              icon: Icon(
+                                _subtitlesEnabled
+                                    ? Icons.closed_caption_rounded
+                                    : Icons.closed_caption_off_rounded,
+                                color: _subtitlesEnabled
+                                    ? const Color(0xFFFF3366)
+                                    : Colors.white70,
+                                size: 24,
+                              ),
+                              onPressed: () {
+                                setState(() {
+                                  _subtitlesEnabled = !_subtitlesEnabled;
+                                });
+                                AppSettingsService.instance.toggleSubtitles(
+                                  _subtitlesEnabled,
+                                );
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
                                     duration: const Duration(seconds: 1),
-                                    content: Text(_subtitlesEnabled ? 'Sulih Suara / Hardsub ID Aktif' : 'Subtitle Dinonaktifkan'),
+                                    content: Text(
+                                      _subtitlesEnabled
+                                          ? 'Subtitle & Sulih Suara Aktif'
+                                          : 'Subtitle Dinonaktifkan',
+                                    ),
                                   ),
                                 );
                               },
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 6),
-                                child: SvgPicture.asset(
-                                  AppAssets.icSubtitle,
-                                  width: 20,
-                                  height: 20,
-                                  colorFilter: ColorFilter.mode(
-                                    _subtitlesEnabled ? AppColors.primary : Colors.white60,
-                                    BlendMode.srcIn,
+                            ),
+                            // Playback Speed Selector Pill
+                            GestureDetector(
+                              onTap: _showSpeedPicker,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 7,
+                                  vertical: 3,
+                                ),
+                                margin: const EdgeInsets.only(right: 6),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withOpacity(0.5),
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(
+                                    color: Colors.white30,
+                                    width: 0.8,
+                                  ),
+                                ),
+                                child: Text(
+                                  '${_playbackSpeed}x',
+                                  style: const TextStyle(
+                                    fontFamily: 'Urbanist',
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white,
                                   ),
                                 ),
                               ),
@@ -228,12 +392,19 @@ class _PlayerScreenState extends State<PlayerScreen> {
                             GestureDetector(
                               onTap: _showQualityPicker,
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                margin: const EdgeInsets.only(left: 4, right: 6),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 3,
+                                ),
+                                margin: const EdgeInsets.only(right: 6),
                                 decoration: BoxDecoration(
-                                  color: AppColors.surface.withOpacity(0.8),
+                                  color: const Color(0xFFFF3366)
+                                      .withOpacity(0.2),
                                   borderRadius: BorderRadius.circular(4),
-                                  border: Border.all(color: AppColors.primary, width: 0.8),
+                                  border: Border.all(
+                                    color: const Color(0xFFFF3366),
+                                    width: 1,
+                                  ),
                                 ),
                                 child: Text(
                                   _selectedQuality,
@@ -251,61 +422,191 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       ),
                     ),
 
-                    // Center Play/Pause button
+                    // Center Playback Controls (Previous, Play/Pause, Next)
                     Center(
-                      child: IconButton(
-                        iconSize: 56,
-                        icon: Icon(
-                          _controller?.value.isPlaying == true
-                              ? Icons.pause_circle_filled_rounded
-                              : Icons.play_circle_filled_rounded,
-                          color: Colors.white.withOpacity(0.9),
-                        ),
-                        onPressed: () {
-                          setState(() {
-                            if (_controller?.value.isPlaying == true) {
-                              _controller?.pause();
-                            } else {
-                              _controller?.play();
-                            }
-                          });
-                        },
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          // Previous Episode Button
+                          IconButton(
+                            iconSize: 38,
+                            icon: Icon(
+                              Icons.skip_previous_rounded,
+                              color: _currentEpisodeIndex > 0
+                                  ? Colors.white
+                                  : Colors.white24,
+                            ),
+                            onPressed: _currentEpisodeIndex > 0
+                                ? () => _selectEpisode(_currentEpisodeIndex - 1)
+                                : null,
+                          ),
+                          const SizedBox(width: 20),
+
+                          // Play / Pause Button
+                          IconButton(
+                            iconSize: 56,
+                            icon: Icon(
+                              _controller?.value.isPlaying == true
+                                  ? Icons.pause_circle_filled_rounded
+                                  : Icons.play_circle_filled_rounded,
+                              color: Colors.white,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                if (_controller?.value.isPlaying == true) {
+                                  _controller?.pause();
+                                } else {
+                                  _controller?.play();
+                                }
+                              });
+                              _resetControlsTimer();
+                            },
+                          ),
+                          const SizedBox(width: 20),
+
+                          // Next Episode Button
+                          IconButton(
+                            iconSize: 38,
+                            icon: Icon(
+                              Icons.skip_next_rounded,
+                              color: _currentEpisodeIndex < totalEps - 1
+                                  ? Colors.white
+                                  : Colors.white24,
+                            ),
+                            onPressed: _currentEpisodeIndex < totalEps - 1
+                                ? () => _selectEpisode(_currentEpisodeIndex + 1)
+                                : null,
+                          ),
+                        ],
                       ),
                     ),
 
-                    // Bottom Progress Slider
+                    // Bottom Progress Slider & Time Indicator
                     Positioned(
                       bottom: 0,
                       left: 0,
                       right: 0,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
                             begin: Alignment.bottomCenter,
                             end: Alignment.topCenter,
-                            colors: [Colors.black.withOpacity(0.7), Colors.transparent],
+                            colors: [
+                              Colors.black.withOpacity(0.85),
+                              Colors.transparent,
+                            ],
                           ),
                         ),
-                        child: Row(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text(
-                              'EP ${_currentEpisodeIndex + 1}',
-                              style: const TextStyle(
-                                fontFamily: 'Urbanist',
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white,
-                              ),
-                            ),
-                            const Spacer(),
-                            IconButton(
-                              icon: const Icon(Icons.skip_next_rounded, color: Colors.white),
-                              onPressed: () {
-                                if (_currentEpisodeIndex < widget.drama.totalEpisodes - 1) {
-                                  _selectEpisode(_currentEpisodeIndex + 1);
-                                }
-                              },
+                            Row(
+                              children: [
+                                Text(
+                                  _controller != null &&
+                                          _controller!.value.isInitialized
+                                      ? _formatDuration(
+                                          _controller!.value.position,
+                                        )
+                                      : '00:00',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontFamily: 'Urbanist',
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                Expanded(
+                                  child: SliderTheme(
+                                    data: SliderTheme.of(context).copyWith(
+                                      thumbShape: const RoundSliderThumbShape(
+                                        enabledThumbRadius: 6,
+                                      ),
+                                      thumbColor: const Color(0xFFFF3366),
+                                      trackHeight: 3,
+                                      activeTrackColor: const Color(0xFFFF3366),
+                                      inactiveTrackColor: Colors.white24,
+                                    ),
+                                    child: Slider(
+                                      value: _isDraggingScrubber
+                                          ? _scrubberValue
+                                          : (_controller != null &&
+                                                _controller!
+                                                    .value
+                                                    .isInitialized)
+                                          ? _controller!
+                                                .value
+                                                .position
+                                                .inMilliseconds
+                                                .toDouble()
+                                                .clamp(
+                                                  0.0,
+                                                  _controller!
+                                                      .value
+                                                      .duration
+                                                      .inMilliseconds
+                                                      .toDouble(),
+                                                )
+                                          : 0.0,
+                                      min: 0.0,
+                                      max:
+                                          (_controller != null &&
+                                              _controller!
+                                                  .value
+                                                  .isInitialized &&
+                                              _controller!
+                                                      .value
+                                                      .duration
+                                                      .inMilliseconds >
+                                                  0)
+                                          ? _controller!
+                                                .value
+                                                .duration
+                                                .inMilliseconds
+                                                .toDouble()
+                                          : 1.0,
+                                      onChangeStart: (val) {
+                                        setState(() {
+                                          _isDraggingScrubber = true;
+                                          _scrubberValue = val;
+                                        });
+                                      },
+                                      onChanged: (val) {
+                                        setState(() {
+                                          _scrubberValue = val;
+                                        });
+                                      },
+                                      onChangeEnd: (val) {
+                                        setState(() {
+                                          _isDraggingScrubber = false;
+                                        });
+                                        _controller?.seekTo(
+                                          Duration(milliseconds: val.toInt()),
+                                        );
+                                        _resetControlsTimer();
+                                      },
+                                    ),
+                                  ),
+                                ),
+                                Text(
+                                  _controller != null &&
+                                          _controller!.value.isInitialized
+                                      ? _formatDuration(
+                                          _controller!.value.duration,
+                                        )
+                                      : '00:00',
+                                  style: const TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 11,
+                                    fontFamily: 'Urbanist',
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
@@ -340,7 +641,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
                           const SizedBox(height: 6),
                           Row(
                             children: [
-                              const Icon(Icons.star_rounded, color: AppColors.gold, size: 18),
+                              const Icon(
+                                Icons.star_rounded,
+                                color: AppColors.gold,
+                                size: 18,
+                              ),
                               const SizedBox(width: 4),
                               Text(
                                 '${widget.drama.rating}',
@@ -353,7 +658,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                               ),
                               const SizedBox(width: 12),
                               Text(
-                                '${widget.drama.totalEpisodes} Episodes • ${widget.drama.viewCount} views',
+                                '$totalEps Episodes • ${widget.drama.viewCount} views',
                                 style: const TextStyle(
                                   fontFamily: 'Urbanist',
                                   fontSize: 13,
@@ -362,17 +667,122 @@ class _PlayerScreenState extends State<PlayerScreen> {
                               ),
                             ],
                           ),
+                          const SizedBox(height: 14),
+
+                          // Quick Action Buttons Row (Like, Favorite/MyList, Share)
+                          Row(
+                            children: [
+                              // Favorite / My List Toggle
+                              ElevatedButton.icon(
+                                onPressed: () {
+                                  AppSettingsService.instance.toggleFavorite(
+                                    widget.drama,
+                                  );
+                                  setState(() {});
+                                },
+                                icon: Icon(
+                                  isFav
+                                      ? Icons.bookmark_added_rounded
+                                      : Icons.bookmark_add_outlined,
+                                  color: isFav
+                                      ? Colors.white
+                                      : AppColors.primary,
+                                  size: 18,
+                                ),
+                                label: Text(
+                                  isFav ? 'Di Daftar' : 'Tambah Favorit',
+                                  style: TextStyle(
+                                    color: isFav
+                                        ? Colors.white
+                                        : AppColors.primary,
+                                    fontFamily: 'Urbanist',
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: isFav
+                                      ? AppColors.primary
+                                      : AppColors.surface,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 10,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                    side: BorderSide(
+                                      color: isFav
+                                          ? AppColors.primary
+                                          : AppColors.divider,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+
+                              // Share Button
+                              OutlinedButton.icon(
+                                onPressed: () {
+                                  Clipboard.setData(
+                                    ClipboardData(
+                                      text:
+                                          'Nonton drama "${widget.drama.title}" di GoDrama: https://github.com/Celosz-fle7/GODrama',
+                                    ),
+                                  );
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      duration: Duration(seconds: 1),
+                                      backgroundColor: Color(0xFF1E232E),
+                                      content: Text(
+                                        'Tautan drama disalin ke clipboard!',
+                                      ),
+                                    ),
+                                  );
+                                },
+                                icon: const Icon(
+                                  Icons.share_rounded,
+                                  size: 18,
+                                  color: Colors.white,
+                                ),
+                                label: const Text(
+                                  'Bagikan',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontFamily: 'Urbanist',
+                                  ),
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  side: const BorderSide(
+                                    color: AppColors.divider,
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 10,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                           const SizedBox(height: 12),
+
                           // Tags
                           Wrap(
                             spacing: 8,
                             children: widget.drama.tags.map((tag) {
                               return Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 4,
+                                ),
                                 decoration: BoxDecoration(
                                   color: AppColors.surface,
                                   borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: AppColors.divider, width: 0.8),
+                                  border: Border.all(
+                                    color: AppColors.divider,
+                                    width: 0.8,
+                                  ),
                                 ),
                                 child: Text(
                                   tag,
@@ -392,14 +802,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
                     const Divider(color: AppColors.divider, height: 24),
 
-                    // Episode Selector Bar
+                    // Episode Selector Header
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            'Episodes (1-${widget.drama.totalEpisodes})',
+                            'Episodes (1-$totalEps)',
                             style: const TextStyle(
                               fontFamily: 'Urbanist',
                               fontSize: 16,
@@ -413,7 +823,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                 context,
                                 drama: widget.drama.copyWith(
                                   episodes: _episodes,
-                                  totalEpisodes: _episodes.isNotEmpty ? _episodes.length : widget.drama.totalEpisodes,
+                                  totalEpisodes: totalEps,
                                 ),
                                 currentEpisodeIndex: _currentEpisodeIndex,
                                 onEpisodeSelected: _selectEpisode,
@@ -422,7 +832,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                             child: const Row(
                               children: [
                                 Text(
-                                  'All',
+                                  'Semua Episode',
                                   style: TextStyle(
                                     fontFamily: 'Urbanist',
                                     fontSize: 13,
@@ -430,7 +840,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                     color: AppColors.primary,
                                   ),
                                 ),
-                                Icon(Icons.chevron_right_rounded, color: AppColors.primary, size: 18),
+                                Icon(
+                                  Icons.chevron_right_rounded,
+                                  color: AppColors.primary,
+                                  size: 18,
+                                ),
                               ],
                             ),
                           ),
@@ -439,13 +853,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     ),
                     const SizedBox(height: 12),
 
-                    // Quick Episode Horizontal Pills
+                    // Quick Episode Horizontal Pills (1, 2, 3...)
                     SizedBox(
                       height: 48,
                       child: ListView.builder(
                         scrollDirection: Axis.horizontal,
                         padding: const EdgeInsets.symmetric(horizontal: 16),
-                        itemCount: widget.drama.totalEpisodes.clamp(1, 20),
+                        itemCount: totalEps.clamp(1, 30),
                         itemBuilder: (context, idx) {
                           final isSelected = idx == _currentEpisodeIndex;
                           return GestureDetector(
@@ -454,10 +868,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
                               width: 48,
                               margin: const EdgeInsets.only(right: 8),
                               decoration: BoxDecoration(
-                                color: isSelected ? AppColors.primary : AppColors.surface,
+                                color: isSelected
+                                    ? AppColors.primary
+                                    : AppColors.surface,
                                 borderRadius: BorderRadius.circular(8),
                                 border: Border.all(
-                                  color: isSelected ? AppColors.primary : AppColors.divider,
+                                  color: isSelected
+                                      ? AppColors.primary
+                                      : AppColors.divider,
                                   width: 1,
                                 ),
                               ),
@@ -467,8 +885,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                   style: TextStyle(
                                     fontFamily: 'Urbanist',
                                     fontSize: 14,
-                                    fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                                    color: isSelected ? Colors.white : AppColors.textPrimary,
+                                    fontWeight: isSelected
+                                        ? FontWeight.w800
+                                        : FontWeight.w600,
+                                    color: isSelected
+                                        ? Colors.white
+                                        : AppColors.textPrimary,
                                   ),
                                 ),
                               ),
@@ -487,7 +909,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text(
-                            'Synopsis',
+                            'Sinopsis Drama',
                             style: TextStyle(
                               fontFamily: 'Urbanist',
                               fontSize: 15,
@@ -514,7 +936,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       const Padding(
                         padding: EdgeInsets.symmetric(horizontal: 16),
                         child: Text(
-                          'More Like This',
+                          'Drama Terkait Lainnya',
                           style: TextStyle(
                             fontFamily: 'Urbanist',
                             fontSize: 16,
@@ -541,7 +963,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                   Navigator.pushReplacement(
                                     context,
                                     MaterialPageRoute(
-                                      builder: (context) => PlayerScreen(drama: item),
+                                      builder: (context) =>
+                                          PlayerScreen(drama: item),
                                     ),
                                   );
                                 },
@@ -562,11 +985,66 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
+  void _showSpeedPicker() {
+    final speeds = [1.0, 1.25, 1.5, 2.0];
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  'Kecepatan Pemutaran',
+                  style: TextStyle(
+                    fontFamily: 'Urbanist',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              ...speeds.map((s) {
+                final isSelected = s == _playbackSpeed;
+                return ListTile(
+                  title: Text(
+                    '${s}x ${s == 1.0 ? '(Normal)' : ''}',
+                    style: TextStyle(
+                      fontFamily: 'Urbanist',
+                      fontWeight: isSelected
+                          ? FontWeight.w800
+                          : FontWeight.w500,
+                      color: isSelected ? AppColors.primary : Colors.white,
+                    ),
+                  ),
+                  trailing: isSelected
+                      ? const Icon(Icons.check, color: AppColors.primary)
+                      : null,
+                  onTap: () {
+                    Navigator.pop(context);
+                    _changeSpeed(s);
+                  },
+                );
+              }),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   void _showQualityPicker() {
     if (_episodes.isEmpty) return;
     final ep = _episodes[_currentEpisodeIndex.clamp(0, _episodes.length - 1)];
     final available = ep.resolutions.keys.toList();
-    if (available.isEmpty) available.add('720p');
+    if (available.isEmpty) {
+      available.addAll(['1080p', '720p', '480p']);
+    }
 
     showModalBottomSheet(
       context: context,
@@ -583,21 +1061,33 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 padding: EdgeInsets.all(16),
                 child: Text(
                   'Pilih Kualitas Video',
-                  style: TextStyle(fontFamily: 'Urbanist', fontSize: 16, fontWeight: FontWeight.w700),
+                  style: TextStyle(
+                    fontFamily: 'Urbanist',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
               ...available.map((q) {
                 final isSelected = q == _selectedQuality;
                 return ListTile(
                   title: Text(
-                    q,
+                    q == '1080p'
+                        ? '1080p Full HD'
+                        : q == '720p'
+                        ? '720p HD Standard'
+                        : '480p Hemat Kuota',
                     style: TextStyle(
                       fontFamily: 'Urbanist',
-                      fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
+                      fontWeight: isSelected
+                          ? FontWeight.w800
+                          : FontWeight.w500,
                       color: isSelected ? AppColors.primary : Colors.white,
                     ),
                   ),
-                  trailing: isSelected ? const Icon(Icons.check, color: AppColors.primary) : null,
+                  trailing: isSelected
+                      ? const Icon(Icons.check, color: AppColors.primary)
+                      : null,
                   onTap: () {
                     Navigator.pop(context);
                     _changeQuality(q);
