@@ -5,7 +5,6 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_assets.dart';
 import '../../core/player/smart_stream_proxy.dart';
-import '../../data/mock/mock_data.dart';
 import '../../data/models/drama_model.dart';
 import '../../data/services/shorttv_service.dart';
 import '../../widgets/episode_drawer.dart';
@@ -20,8 +19,9 @@ class ForYouScreen extends StatefulWidget {
 
 class _ForYouScreenState extends State<ForYouScreen> {
   final PageController _pageController = PageController();
-  List<DramaModel> _dramas = MockData.allDramas;
+  List<DramaModel> _dramas = [];
   int _activeDramaIndex = 0;
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -30,16 +30,68 @@ class _ForYouScreenState extends State<ForYouScreen> {
   }
 
   Future<void> _loadLiveShortDramas() async {
-    final live = await ShortTvService.instance.fetchShortTvDramas(page: 1, perPage: 15);
-    if (mounted && live.isNotEmpty) {
+    // Memuat tangga algoritma ShortTV untuk Indonesia (Sedang Trending -> Sulih Suara Indonesia)
+    final live = await ShortTvService.instance.fetchForYouAlgorithm();
+    if (mounted) {
       setState(() {
         _dramas = live;
+        _isLoading = false;
       });
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(color: AppColors.primary),
+              SizedBox(height: 14),
+              Text(
+                'Memuat Tangga ShortTV Indonesia...',
+                style: TextStyle(
+                  fontFamily: 'Urbanist',
+                  fontSize: 13,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_dramas.isEmpty) {
+      return Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.wifi_off_rounded, color: AppColors.textMuted, size: 48),
+              const SizedBox(height: 12),
+              const Text(
+                'Gagal memuat feed video',
+                style: TextStyle(color: Colors.white, fontFamily: 'Urbanist'),
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () {
+                  setState(() => _isLoading = true);
+                  _loadLiveShortDramas();
+                },
+                child: const Text('Coba Lagi'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: Colors.black,
       body: PageView.builder(

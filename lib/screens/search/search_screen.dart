@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_assets.dart';
-import '../../data/mock/mock_data.dart';
 import '../../data/models/drama_model.dart';
 import '../../data/services/shorttv_service.dart';
 import '../../widgets/drama_card.dart';
@@ -19,16 +18,32 @@ class _SearchScreenState extends State<SearchScreen> {
   final TextEditingController _searchController = TextEditingController();
   List<DramaModel> _results = [];
   bool _isSearching = false;
+  List<DramaModel> _trendingDramas = [];
 
   final List<String> _trendingTags = [
-    'Billionaire',
-    'Revenge',
-    'Secret Heir',
-    'CEO Wife',
-    'Contract Marriage',
-    'Martial Arts',
-    'Strong Female',
+    'Sulih Suara',
+    'CEO',
+    'Presdir',
+    'Pernikahan',
+    'Dewa',
+    'Balas Dendam',
+    'Kiamat',
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTrending();
+  }
+
+  Future<void> _loadTrending() async {
+    final live = await ShortTvService.instance.fetchForYouAlgorithm();
+    if (mounted && live.isNotEmpty) {
+      setState(() {
+        _trendingDramas = live;
+      });
+    }
+  }
 
   void _onSearch(String query) async {
     if (query.trim().isEmpty) {
@@ -39,26 +54,14 @@ class _SearchScreenState extends State<SearchScreen> {
       return;
     }
 
-    final localMatches = MockData.allDramas.where((drama) {
-      final titleMatch = drama.title.toLowerCase().contains(query.toLowerCase());
-      final tagMatch = drama.tags.any((t) => t.toLowerCase().contains(query.toLowerCase()));
-      return titleMatch || tagMatch;
-    }).toList();
-
     setState(() {
       _isSearching = true;
-      _results = localMatches;
     });
 
-    // Cari live ShortTV drama dari MovieBox backend
     final remoteResults = await ShortTvService.instance.searchShortTv(query);
     if (mounted && _isSearching && _searchController.text == query) {
-      final combined = [...remoteResults, ...localMatches];
-      // Deduplicate by ID
-      final seen = <String>{};
-      final unique = combined.where((d) => seen.add(d.id)).toList();
       setState(() {
-        _results = unique;
+        _results = remoteResults;
       });
     }
   }
@@ -202,7 +205,7 @@ class _SearchScreenState extends State<SearchScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        ...MockData.allDramas.take(5).toList().asMap().entries.map((entry) {
+        ..._trendingDramas.take(6).toList().asMap().entries.map((entry) {
           final index = entry.key;
           final drama = entry.value;
 

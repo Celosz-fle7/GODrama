@@ -196,13 +196,77 @@ class ShortTvService {
     return null;
   }
 
-  /// Ambil daftar drama ShortTV vertikal resmi (subjectType: 7)
-  Future<List<DramaModel>> fetchShortTvDramas({int page = 1, int perPage = 20}) async {
-    final payload = {
+  /// Ambil Tangga Algoritma Resmi ShortTV untuk audiens Indonesia:
+  /// Urutan mutlak server: Sedang Trending -> Sulih Suara Indonesia (Hot) -> Terbaru.
+  Future<List<DramaModel>> fetchForYouAlgorithm() async {
+    final list = <DramaModel>[];
+    final seen = <String>{};
+
+    // 1. Ambil tangga operasional Tab 13 (Sedang Trending & Sulih Suara terhangat hari ini)
+    try {
+      final tabResp = await _request('GET', '/wefeed-mobile-bff/tab-operating?tabId=13');
+      if (tabResp != null && tabResp['code'] == 0 && tabResp['data'] is Map<String, dynamic>) {
+        final sections = tabResp['data']['items'] as List?;
+        if (sections != null) {
+          for (final sec in sections) {
+            if (sec is! Map<String, dynamic>) continue;
+            final subjects = sec['subjects'] ?? sec['items'];
+            if (subjects is List) {
+              for (final sub in subjects) {
+                if (sub is Map<String, dynamic>) {
+                  final model = _mapToDramaModel(sub);
+                  if (model.id.isNotEmpty && seen.add(model.id)) {
+                    list.add(model);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    } catch (_) {}
+
+    // 2. Ambil katalog kurasi Sulih Suara Indonesia (Hot)
+    try {
+      final indoDramas = await fetchShortTvDramas(
+        page: 1,
+        perPage: 20,
+        classify: 'Sulih suara Indonesia',
+        sort: 'Hot',
+      );
+      for (final d in indoDramas) {
+        if (seen.add(d.id)) {
+          list.add(d);
+        }
+      }
+    } catch (_) {}
+
+    // 3. Fallback jika kosong: ambil ShortTV general
+    if (list.isEmpty) {
+      list.addAll(await fetchShortTvDramas(page: 1, perPage: 20));
+    }
+
+    return list;
+  }
+
+  /// Ambil daftar drama ShortTV vertikal resmi (subjectType: 7) dengan filter taksonomi
+  Future<List<DramaModel>> fetchShortTvDramas({
+    int page = 1,
+    int perPage = 20,
+    String? classify,
+    String? sort = 'Hot',
+  }) async {
+    final payload = <String, dynamic>{
       'page': page,
       'perPage': perPage,
       'subjectType': 7, // 7 = ShortTV Micro-Drama
     };
+    if (classify != null && classify.isNotEmpty) {
+      payload['classify'] = classify;
+    }
+    if (sort != null && sort.isNotEmpty) {
+      payload['sort'] = sort;
+    }
 
     final resp = await _request('POST', '/wefeed-mobile-bff/subject-api/list', bodyJson: payload);
     if (resp != null && resp['code'] == 0 && resp['data'] is Map<String, dynamic>) {
@@ -214,7 +278,7 @@ class ShortTvService {
     return [];
   }
 
-  /// Ambil daftar episode dan CloudFront Signed MP4 stream ShortTV
+  /// Ambil daftar episode dan CloudFront Signed MP4 stream ShortTV lengkap dengan multi-resolusi & subtitle
   Future<List<EpisodeModel>> fetchShortTvEpisodes(String subjectId, {int startPos = 1, int endPos = 30}) async {
     final safeEnd = (endPos - startPos >= 30) ? (startPos + 29) : endPos;
     final path = '/wefeed-mobile-bff/shorts/mini-list?endPosition=$safeEnd&pagerMode=1&startPosition=$startPos&subjectId=$subjectId';
@@ -229,13 +293,31 @@ class ShortTvService {
           final addrObj = vidObj?['videoAddress'] as Map<String, dynamic>?;
           final streamUrl = addrObj?['url']?.toString() ?? '';
 
+          // Ekstraksi seluruh pilihan resolusi (1080p, 720p, 480p)
+          final resMap = <String, String>{};
+          final addrList = vidObj?['addressList'] as List?;
+          if (addrList != null) {
+            for (final a in addrList) {
+              final r = a['resolution']?.toString() ?? '720';
+              final u = a['url']?.toString() ?? '';
+              if (u.isNotEmpty) {
+                resMap['${r}p'] = u;
+              }
+            }
+          }
+          if (resMap.isEmpty && streamUrl.isNotEmpty) {
+            final defaultRes = addrObj?['resolution']?.toString() ?? '720';
+            resMap['${defaultRes}p'] = streamUrl;
+          }
+
           return EpisodeModel(
             id: it['miniId']?.toString() ?? '${subjectId}_$epNum',
             episodeNumber: epNum,
             title: 'Episode $epNum',
             videoUrl: streamUrl,
-            durationSeconds: 90,
+            durationSeconds: (addrObj?['duration'] as num?)?.toInt() ?? 90,
             isUnlocked: true,
+            resolutions: resMap,
           );
         }).where((ep) => ep.videoUrl.isNotEmpty).toList();
       }
@@ -282,7 +364,16 @@ class ShortTvService {
     }
     if (tagsList.isEmpty) tagsList.add('ShortTV');
 
-    final eps = (raw['totalEpisodes'] as num?)?.toInt() ?? (raw['episodesCount'] as num?)?.toInt() ?? 40;
+    final eps = (raw['shortsEpisode'] as num?)?.toInt() ??
+        (raw['totalEpisodes'] as num?)?.toInt() ??
+        (raw['episodesCount'] as num?)?.toInt() ??
+        40;
+
+    final viewersRaw = raw['viewers']?.toString() ?? '';
+    final viewCount = viewersRaw.isNotEmpty ? viewersRaw : '${(Random().nextInt(15) + 3)}.${Random().nextInt(9)}M';
+    final rateVal = (raw['rate'] as num?)?.toDouble() ??
+        (raw['imdbRate'] as num?)?.toDouble() ??
+        4.8;
 
     return DramaModel(
       id: subjectId,
@@ -292,8 +383,8 @@ class ShortTvService {
       description: desc,
       tags: tagsList,
       totalEpisodes: eps,
-      viewCount: '${(Random().nextInt(15) + 3)}.${Random().nextInt(9)}M',
-      rating: 4.8 + (Random().nextInt(2) / 10.0),
+      viewCount: viewCount,
+      rating: rateVal,
       isTrending: true,
     );
   }

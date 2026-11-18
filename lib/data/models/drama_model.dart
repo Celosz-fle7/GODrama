@@ -61,6 +61,8 @@ class EpisodeModel {
   final String videoUrl;
   final int durationSeconds;
   final bool isUnlocked;
+  final Map<String, String> resolutions;
+  final String? subtitleUrl;
 
   const EpisodeModel({
     required this.id,
@@ -69,7 +71,16 @@ class EpisodeModel {
     required this.videoUrl,
     this.durationSeconds = 90,
     this.isUnlocked = true,
+    this.resolutions = const {},
+    this.subtitleUrl,
   });
+
+  String getUrlForQuality(String quality) {
+    if (resolutions.containsKey(quality)) {
+      return resolutions[quality]!;
+    }
+    return videoUrl;
+  }
 }
 
 class CategoryModel {

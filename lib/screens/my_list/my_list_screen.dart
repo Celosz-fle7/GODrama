@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../core/constants/app_colors.dart';
-import '../../data/mock/mock_data.dart';
 import '../../data/models/drama_model.dart';
+import '../../data/services/shorttv_service.dart';
 import '../player/player_screen.dart';
 
 class MyListScreen extends StatefulWidget {
@@ -14,11 +14,24 @@ class MyListScreen extends StatefulWidget {
 
 class _MyListScreenState extends State<MyListScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  List<DramaModel> _savedDramas = [];
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _loadSavedDramas();
+  }
+
+  Future<void> _loadSavedDramas() async {
+    final live = await ShortTvService.instance.fetchShortTvDramas(page: 1, perPage: 10);
+    if (mounted) {
+      setState(() {
+        _savedDramas = live;
+        _isLoading = false;
+      });
+    }
   }
 
   @override
@@ -50,18 +63,25 @@ class _MyListScreenState extends State<MyListScreen> with SingleTickerProviderSt
           ],
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildHistoryList(),
-          _buildFavoritesList(),
-        ],
-      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+          : TabBarView(
+              controller: _tabController,
+              children: [
+                _buildHistoryList(),
+                _buildFavoritesList(),
+              ],
+            ),
     );
   }
 
   Widget _buildHistoryList() {
-    final historyItems = MockData.allDramas.take(3).toList();
+    final historyItems = _savedDramas.take(3).toList();
+    if (historyItems.isEmpty) {
+      return const Center(
+        child: Text('Belum ada riwayat tontonan', style: TextStyle(color: AppColors.textMuted)),
+      );
+    }
 
     return ListView.builder(
       padding: const EdgeInsets.all(16),
@@ -152,7 +172,12 @@ class _MyListScreenState extends State<MyListScreen> with SingleTickerProviderSt
   }
 
   Widget _buildFavoritesList() {
-    final favorites = MockData.featuredDramas;
+    final favorites = _savedDramas.skip(3).toList();
+    if (favorites.isEmpty) {
+      return const Center(
+        child: Text('Belum ada drama favorit', style: TextStyle(color: AppColors.textMuted)),
+      );
+    }
 
     return GridView.builder(
       padding: const EdgeInsets.all(16),

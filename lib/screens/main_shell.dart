@@ -14,7 +14,8 @@ class MainShell extends StatefulWidget {
 }
 
 class _MainShellState extends State<MainShell> {
-  int _currentIndex = 0;
+  // Buka pertama kali langsung ke tab For You (feed vertikal reel)
+  int _currentIndex = 1;
 
   final List<Widget> _pages = const [
     HomeScreen(),

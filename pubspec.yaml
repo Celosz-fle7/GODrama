@@ -36,7 +36,6 @@ flutter:
     - assets/images/my_list/
     - assets/images/search/
     - assets/images/common/
-    - assets/mock/
 
   fonts:
     - family: Urbanist

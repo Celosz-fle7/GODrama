@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_assets.dart';
-import '../../data/mock/mock_data.dart';
 import '../../data/models/drama_model.dart';
 import '../../data/services/shorttv_service.dart';
 import '../../widgets/drama_card.dart';
@@ -22,6 +21,12 @@ class _HomeScreenState extends State<HomeScreen> {
   List<DramaModel> _dramas = [];
   bool _isLoading = true;
 
+  final List<CategoryModel> _categories = const [
+    CategoryModel(id: 'trending', name: 'Sedang Trending 🔥'),
+    CategoryModel(id: 'dubbing', name: 'Sulih Suara ID 🇮🇩'),
+    CategoryModel(id: 'terbaru', name: 'Terbaru ✨'),
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -29,10 +34,28 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _loadDramas() async {
-    final liveDramas = await ShortTvService.instance.fetchShortTvDramas(page: 1, perPage: 20);
+    setState(() => _isLoading = true);
+    List<DramaModel> liveDramas = [];
+    if (_selectedCategoryId == 'dubbing') {
+      liveDramas = await ShortTvService.instance.fetchShortTvDramas(
+        page: 1,
+        perPage: 20,
+        classify: 'Sulih suara Indonesia',
+        sort: 'Hot',
+      );
+    } else if (_selectedCategoryId == 'terbaru') {
+      liveDramas = await ShortTvService.instance.fetchShortTvDramas(
+        page: 1,
+        perPage: 20,
+        sort: 'Latest',
+      );
+    } else {
+      liveDramas = await ShortTvService.instance.fetchForYouAlgorithm();
+    }
+
     if (mounted) {
       setState(() {
-        _dramas = liveDramas.isNotEmpty ? liveDramas : MockData.allDramas;
+        _dramas = liveDramas;
         _isLoading = false;
       });
     }
@@ -40,7 +63,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final dramas = _dramas.isNotEmpty ? _dramas : MockData.allDramas;
+    final dramas = _dramas;
     final featured = dramas.take(4).toList();
 
     return Scaffold(
@@ -131,16 +154,19 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: ListView.builder(
                     scrollDirection: Axis.horizontal,
                     padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: MockData.categories.length,
+                    itemCount: _categories.length,
                     itemBuilder: (context, index) {
-                      final category = MockData.categories[index];
+                      final category = _categories[index];
                       final isSelected = category.id == _selectedCategoryId;
 
                       return GestureDetector(
                         onTap: () {
-                          setState(() {
-                            _selectedCategoryId = category.id;
-                          });
+                          if (_selectedCategoryId != category.id) {
+                            setState(() {
+                              _selectedCategoryId = category.id;
+                            });
+                            _loadDramas();
+                          }
                         },
                         child: Container(
                           margin: const EdgeInsets.only(right: 8),

@@ -4,7 +4,6 @@ import 'package:video_player/video_player.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_assets.dart';
 import '../../core/player/smart_stream_proxy.dart';
-import '../../data/mock/mock_data.dart';
 import '../../data/models/drama_model.dart';
 import '../../data/services/shorttv_service.dart';
 import '../../widgets/drama_card.dart';
@@ -31,6 +30,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
   bool _isLiked = false;
   List<EpisodeModel> _episodes = [];
   bool _isLoadingEpisodes = false;
+  String _selectedQuality = '1080p';
+  bool _subtitlesEnabled = true;
+  List<DramaModel> _recommendedDramas = [];
 
   @override
   void initState() {
@@ -38,6 +40,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _currentEpisodeIndex = widget.initialEpisodeIndex;
     _episodes = widget.drama.episodes;
     _setupVideo();
+    _loadRecommendations();
+  }
+
+  Future<void> _loadRecommendations() async {
+    final live = await ShortTvService.instance.fetchShortTvDramas(page: 1, perPage: 10);
+    if (mounted && live.isNotEmpty) {
+      setState(() {
+        _recommendedDramas = live.where((d) => d.id != widget.drama.id).toList();
+      });
+    }
   }
 
   Future<void> _setupVideo() async {
@@ -54,7 +66,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
     if (_episodes.isEmpty) return;
     final ep = _episodes[_currentEpisodeIndex.clamp(0, _episodes.length - 1)];
-    final proxiedUrl = SmartStreamProxy.instance.getProxyUrl(ep.videoUrl);
+
+    // Pilih resolusi yang tersedia di episode
+    if (!ep.resolutions.containsKey(_selectedQuality) && ep.resolutions.isNotEmpty) {
+      _selectedQuality = ep.resolutions.keys.first;
+    }
+    final rawStreamUrl = ep.getUrlForQuality(_selectedQuality);
+    final proxiedUrl = SmartStreamProxy.instance.getProxyUrl(rawStreamUrl);
 
     _controller?.dispose();
     _controller = VideoPlayerController.networkUrl(Uri.parse(proxiedUrl))
@@ -68,6 +86,28 @@ class _PlayerScreenState extends State<PlayerScreen> {
             final nextEp = _episodes[_currentEpisodeIndex + 1];
             SmartStreamProxy.instance.preloadNextEpisode(nextEp.videoUrl);
           }
+        }
+      });
+  }
+
+  void _changeQuality(String quality) async {
+    if (_selectedQuality == quality || _controller == null) return;
+    final currentPos = _controller!.value.position;
+    setState(() {
+      _selectedQuality = quality;
+    });
+
+    final ep = _episodes[_currentEpisodeIndex];
+    final newUrl = ep.getUrlForQuality(quality);
+    final proxiedUrl = SmartStreamProxy.instance.getProxyUrl(newUrl);
+
+    _controller?.dispose();
+    _controller = VideoPlayerController.networkUrl(Uri.parse(proxiedUrl))
+      ..initialize().then((_) {
+        if (mounted) {
+          _controller?.seekTo(currentPos);
+          _controller?.play();
+          setState(() {});
         }
       });
   }
@@ -157,6 +197,52 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                   fontSize: 15,
                                   fontWeight: FontWeight.w700,
                                   color: Colors.white,
+                                ),
+                              ),
+                            ),
+                            // Subtitle Toggle Button
+                            GestureDetector(
+                              onTap: () {
+                                setState(() => _subtitlesEnabled = !_subtitlesEnabled);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    duration: const Duration(seconds: 1),
+                                    content: Text(_subtitlesEnabled ? 'Sulih Suara / Hardsub ID Aktif' : 'Subtitle Dinonaktifkan'),
+                                  ),
+                                );
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 6),
+                                child: SvgPicture.asset(
+                                  AppAssets.icSubtitle,
+                                  width: 20,
+                                  height: 20,
+                                  colorFilter: ColorFilter.mode(
+                                    _subtitlesEnabled ? AppColors.primary : Colors.white60,
+                                    BlendMode.srcIn,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            // Quality Picker Pill
+                            GestureDetector(
+                              onTap: _showQualityPicker,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                margin: const EdgeInsets.only(left: 4, right: 6),
+                                decoration: BoxDecoration(
+                                  color: AppColors.surface.withOpacity(0.8),
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(color: AppColors.primary, width: 0.8),
+                                ),
+                                child: Text(
+                                  _selectedQuality,
+                                  style: const TextStyle(
+                                    fontFamily: 'Urbanist',
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white,
+                                  ),
                                 ),
                               ),
                             ),
@@ -423,49 +509,48 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       ),
                     ),
 
-                    const Divider(color: AppColors.divider, height: 32),
-
-                    // "More Like This" Section
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16),
-                      child: Text(
-                        'More Like This',
-                        style: TextStyle(
-                          fontFamily: 'Urbanist',
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.textPrimary,
+                    if (_recommendedDramas.isNotEmpty) ...[
+                      const Divider(color: AppColors.divider, height: 32),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 16),
+                        child: Text(
+                          'More Like This',
+                          style: TextStyle(
+                            fontFamily: 'Urbanist',
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 12),
-
-                    SizedBox(
-                      height: 200,
-                      child: ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        itemCount: MockData.allDramas.length,
-                        itemBuilder: (context, index) {
-                          final item = MockData.allDramas[index];
-                          return Padding(
-                            padding: const EdgeInsets.only(right: 12),
-                            child: DramaCard(
-                              width: 110,
-                              drama: item,
-                              onTap: () {
-                                Navigator.pushReplacement(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => PlayerScreen(drama: item),
-                                  ),
-                                );
-                              },
-                            ),
-                          );
-                        },
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        height: 200,
+                        child: ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          itemCount: _recommendedDramas.length,
+                          itemBuilder: (context, index) {
+                            final item = _recommendedDramas[index];
+                            return Padding(
+                              padding: const EdgeInsets.only(right: 12),
+                              child: DramaCard(
+                                width: 110,
+                                drama: item,
+                                onTap: () {
+                                  Navigator.pushReplacement(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => PlayerScreen(drama: item),
+                                    ),
+                                  );
+                                },
+                              ),
+                            );
+                          },
+                        ),
                       ),
-                    ),
+                    ],
                     const SizedBox(height: 32),
                   ],
                 ),
@@ -474,6 +559,55 @@ class _PlayerScreenState extends State<PlayerScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  void _showQualityPicker() {
+    if (_episodes.isEmpty) return;
+    final ep = _episodes[_currentEpisodeIndex.clamp(0, _episodes.length - 1)];
+    final available = ep.resolutions.keys.toList();
+    if (available.isEmpty) available.add('720p');
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  'Pilih Kualitas Video',
+                  style: TextStyle(fontFamily: 'Urbanist', fontSize: 16, fontWeight: FontWeight.w700),
+                ),
+              ),
+              ...available.map((q) {
+                final isSelected = q == _selectedQuality;
+                return ListTile(
+                  title: Text(
+                    q,
+                    style: TextStyle(
+                      fontFamily: 'Urbanist',
+                      fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
+                      color: isSelected ? AppColors.primary : Colors.white,
+                    ),
+                  ),
+                  trailing: isSelected ? const Icon(Icons.check, color: AppColors.primary) : null,
+                  onTap: () {
+                    Navigator.pop(context);
+                    _changeQuality(q);
+                  },
+                );
+              }),
+            ],
+          ),
+        );
+      },
     );
   }
 }
