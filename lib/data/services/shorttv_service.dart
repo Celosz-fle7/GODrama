@@ -5,6 +5,7 @@ import 'dart:math';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/drama_model.dart';
 
@@ -23,6 +24,12 @@ class ShortTvService {
   static const String _userAgent =
       'com.community.oneroom/50020132 (Linux; U; Android 16; id_ID; Infinix X6870; Build/BP2A.250605.031.A3; Cronet/155.0.8059.16)';
 
+  // Satu HttpClient bersama untuk semua request (connection reuse /
+  // keep-alive), bukan HttpClient baru per request.
+  static final HttpClient _httpClient = HttpClient()
+    ..connectionTimeout = const Duration(seconds: 12)
+    ..idleTimeout = const Duration(seconds: 15);
+
   String _deviceId = '';
   String? _token;
   bool _isHandshaking = false;
@@ -33,6 +40,24 @@ class ShortTvService {
       final rand = Random.secure();
       final bytes = List<int>.generate(16, (_) => rand.nextInt(256));
       _deviceId = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+    }
+  }
+
+  /// DeviceId persisten per instalasi: pakai yang tersimpan bila ada,
+  /// kalau belum ada simpan yang sudah dibuat. Dipanggil di awal handshake,
+  /// sebelum request apa pun memakai ID ini.
+  Future<void> _loadPersistedDeviceId() async {
+    _ensureDeviceId();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final stored = prefs.getString('godrama_device_id');
+      if (stored != null && stored.isNotEmpty) {
+        _deviceId = stored;
+      } else {
+        await prefs.setString('godrama_device_id', _deviceId);
+      }
+    } catch (e) {
+      debugPrint('[ShortTvService] Gagal baca/simpan deviceId: $e');
     }
   }
 
@@ -117,7 +142,7 @@ class ShortTvService {
   Future<void> _handshake() async {
     if (_isHandshaking) return;
     _isHandshaking = true;
-    _ensureDeviceId();
+    await _loadPersistedDeviceId();
 
     try {
       final ts = DateTime.now().millisecondsSinceEpoch.toString();
@@ -130,9 +155,7 @@ class ShortTvService {
           .convert(utf8.encode(ts.split('').reversed.join('')))
           .toString();
 
-      final client = HttpClient()
-        ..connectionTimeout = const Duration(seconds: 10);
-      final request = await client.getUrl(
+      final request = await _httpClient.getUrl(
         Uri.parse('$_baseUrl/wefeed-mobile-bff/app/config'),
       );
 
@@ -164,9 +187,12 @@ class ShortTvService {
           if (userMap is Map<String, dynamic> && userMap['token'] != null) {
             _token = userMap['token'].toString();
           }
-        } catch (_) {}
+        } catch (e) {
+          debugPrint('[ShortTvService] Gagal parse token handshake: $e');
+        }
       }
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[ShortTvService] Handshake gagal: $e');
     } finally {
       _isHandshaking = false;
     }
@@ -192,12 +218,10 @@ class ShortTvService {
     );
 
     try {
-      final client = HttpClient()
-        ..connectionTimeout = const Duration(seconds: 12);
       final uri = Uri.parse('$_baseUrl$pathWithQuery');
       final request = await (method == 'POST'
-          ? client.postUrl(uri)
-          : client.getUrl(uri));
+          ? _httpClient.postUrl(uri)
+          : _httpClient.getUrl(uri));
 
       request.headers.set('User-Agent', _userAgent);
       request.headers.set('accept', '*/*');
@@ -247,7 +271,9 @@ class ShortTvService {
           if (userMap is Map<String, dynamic> && userMap['token'] != null) {
             _token = userMap['token'].toString();
           }
-        } catch (_) {}
+        } catch (e) {
+          debugPrint('[ShortTvService] Gagal parse token x-user: $e');
+        }
       }
 
       if (response.statusCode == 200) {
@@ -269,142 +295,130 @@ class ShortTvService {
           );
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[ShortTvService] Request gagal ($method $pathWithQuery): $e');
+    }
 
     return null;
   }
 
-  /// Algoritma Tab For You: Mix Rotasi bergantian dari Sulih Suara & Dubbing
-  Future<List<DramaModel>> fetchForYouAlgorithm() async {
-    final list = <DramaModel>[];
-    final seen = <String>{};
-
-    final sulihSuaraPool = <DramaModel>[];
-    final dubbingPool = <DramaModel>[];
-
-    // 1. Ambil seksi operasional Tab 13
-    try {
-      final sections =
-          await fetchOperatingSections(tabId: 13, forceRefresh: true);
-      final dubSec = sections['🎧Drama Dubbing'] ?? [];
-      final lokalSec = sections['🇮🇩Lokal Short TV '] ?? [];
-      for (final d in lokalSec) {
-        if (seen.add(d.id)) sulihSuaraPool.add(d);
-      }
-      for (final d in dubSec) {
-        if (seen.add(d.id)) dubbingPool.add(d);
-      }
-    } catch (_) {}
-
-    // 2. Tarik kueri pencarian kata kunci "sulih suara" & variasi
-    for (int p = 1; p <= 3; p++) {
-      try {
-        final res = await searchShortTv('sulih suara', page: p, perPage: 20);
-        if (res.isEmpty) break;
-        for (final d in res) {
-          if (seen.add(d.id)) sulihSuaraPool.add(d);
-        }
-      } catch (_) {}
-    }
-    for (final kw in ['sulih suara indonesia', 'sulih', 'suara']) {
-      try {
-        final res = await searchShortTv(kw, page: 1, perPage: 20);
-        for (final d in res) {
-          if (seen.add(d.id)) sulihSuaraPool.add(d);
-        }
-      } catch (_) {}
-    }
-
-    // 3. Tarik kueri pencarian kata kunci "dubbing" & variasi
-    for (int p = 1; p <= 3; p++) {
-      try {
-        final res = await searchShortTv('dubbing', page: p, perPage: 20);
-        if (res.isEmpty) break;
-        for (final d in res) {
-          if (seen.add(d.id)) dubbingPool.add(d);
-        }
-      } catch (_) {}
-    }
-    for (final kw in ['dubbing indo', 'dubbing indonesia', 'dub']) {
-      try {
-        final res = await searchShortTv(kw, page: 1, perPage: 20);
-        for (final d in res) {
-          if (seen.add(d.id)) dubbingPool.add(d);
-        }
-      } catch (_) {}
-    }
-
-    // 4. Mix Rotasi: Interleave 1 Sulih Suara, 1 Dubbing secara berselang-seling
-    final maxLen = sulihSuaraPool.length > dubbingPool.length
-        ? sulihSuaraPool.length
-        : dubbingPool.length;
-
-    for (int i = 0; i < maxLen; i++) {
-      if (i < sulihSuaraPool.length) {
-        list.add(sulihSuaraPool[i]);
-      }
-      if (i < dubbingPool.length) {
-        list.add(dubbingPool[i]);
-      }
-    }
-
-    // Fallback jika kosong
-    if (list.isEmpty) {
-      list.addAll(await fetchShortTvDramas(page: 1, perPage: 20));
-    }
-
-    return list;
-  }
-
-  /// Ambil daftar drama ShortTV vertikal resmi (subjectType: 7) dengan filter taksonomi
-  Future<List<DramaModel>> fetchShortTvDramas({
+  /// Pencarian yang tidak pernah throw: gagal jaringan = daftar kosong.
+  /// Dipakai di dalam Future.wait agar satu request gagal tidak
+  /// menggagalkan seluruh halaman.
+  Future<List<DramaModel>> _safeSearch(
+    String keyword, {
     int page = 1,
     int perPage = 20,
-    String? classify,
-    String? sort = 'Hot',
   }) async {
-    final payload = <String, dynamic>{
-      'page': page,
-      'perPage': perPage,
-      'subjectType': 7, // 7 = ShortTV Micro-Drama
-    };
-    if (classify != null && classify.isNotEmpty) {
-      payload['classify'] = classify;
+    try {
+      return await searchShortTv(keyword, page: page, perPage: perPage);
+    } catch (e) {
+      debugPrint('[ShortTvService] Search "$keyword" p$page gagal: $e');
+      return [];
     }
-    if (sort != null && sort.isNotEmpty) {
-      payload['sort'] = sort;
+  }
+
+  Future<Map<String, List<DramaModel>>> _safeSections({
+    int tabId = 13,
+    bool forceRefresh = false,
+  }) async {
+    try {
+      return await fetchOperatingSections(
+        tabId: tabId,
+        forceRefresh: forceRefresh,
+      );
+    } catch (e) {
+      debugPrint('[ShortTvService] Sections tab $tabId gagal: $e');
+      return {};
     }
+  }
 
-    final resp = await _request(
-      'POST',
-      '/wefeed-mobile-bff/subject-api/search',
-      bodyJson: payload,
-    );
+  /// Interleave 1:1 dua pool (sulih suara / dubbing).
+  List<DramaModel> _interleave(
+    List<DramaModel> a,
+    List<DramaModel> b,
+  ) {
+    final out = <DramaModel>[];
+    final maxLen = a.length > b.length ? a.length : b.length;
+    for (int i = 0; i < maxLen; i++) {
+      if (i < a.length) out.add(a[i]);
+      if (i < b.length) out.add(b[i]);
+    }
+    return out;
+  }
 
-    if (resp != null &&
-        resp['code'] == 0 &&
-        resp['data'] is Map<String, dynamic>) {
-      final items = resp['data']['items'] as List?;
-      if (items != null) {
-        return items
-            .whereType<Map<String, dynamic>>()
-            .map(_mapToDramaModel)
-            .where((d) => d.id.isNotEmpty)
-            .toList();
-      }
+  /// For You per halaman (mix rotasi sulih suara / dubbing, interleave 1:1).
+  /// Semua request dalam satu halaman jalan PARALEL (Future.wait), bukan
+  /// sekuensial — halaman 1 hanya butuh ~1x waktu request, bukan 13x.
+  /// Halaman 1 = seksi + sulih p1 + dubbing p1; halaman 2-3 = halaman
+  /// pencarian berikutnya + varian keyword. Di luar itu kosong.
+  /// Dedup antar halaman dilakukan pemanggil (layar menyimpan seen-set).
+  Future<List<DramaModel>> fetchForYouPage(int page) async {
+    if (page < 1) return [];
+    if (page == 1) {
+      final (sections, sulih, dub) = await (
+        _safeSections(tabId: 13, forceRefresh: true),
+        _safeSearch('sulih suara', page: 1),
+        _safeSearch('dubbing', page: 1),
+      ).wait;
+      final sulihPool = <DramaModel>[
+        ...sections['🇮🇩Lokal Short TV '] ?? [],
+        ...sulih,
+      ];
+      final dubPool = <DramaModel>[
+        ...sections['🎧Drama Dubbing'] ?? [],
+        ...dub,
+      ];
+      return _interleave(_dedupe(sulihPool), _dedupe(dubPool));
+    }
+    if (page == 2) {
+      final (sulih2, dub2, sulihVar, dubVar) = await (
+        _safeSearch('sulih suara', page: 2),
+        _safeSearch('dubbing', page: 2),
+        _safeSearch('sulih suara indonesia', page: 1),
+        _safeSearch('dubbing indo', page: 1),
+      ).wait;
+      final sulihPool = <DramaModel>[...sulih2, ...sulihVar];
+      final dubPool = <DramaModel>[...dub2, ...dubVar];
+      return _interleave(_dedupe(sulihPool), _dedupe(dubPool));
+    }
+    if (page == 3) {
+      final (sulih3, dub3, sulihV, suaraV, dubInd, dubV) = await (
+        _safeSearch('sulih suara', page: 3),
+        _safeSearch('dubbing', page: 3),
+        _safeSearch('sulih', page: 1),
+        _safeSearch('suara', page: 1),
+        _safeSearch('dubbing indonesia', page: 1),
+        _safeSearch('dub', page: 1),
+      ).wait;
+      final sulihPool = <DramaModel>[...sulih3, ...sulihV, ...suaraV];
+      final dubPool = <DramaModel>[...dub3, ...dubInd, ...dubV];
+      return _interleave(_dedupe(sulihPool), _dedupe(dubPool));
     }
     return [];
   }
 
-  Map<String, List<DramaModel>>? _cachedSections;
+  List<DramaModel> _dedupe(List<DramaModel> input) {
+    final seen = <String>{};
+    return input.where((d) => d.id.isNotEmpty && seen.add(d.id)).toList();
+  }
+
+  // Cache seksi per tabId dengan TTL — sebelumnya satu cache tanpa TTL
+  // yang mengabaikan tabId (cache tab 13 dipakai untuk tab lain).
+  static const _sectionsTtl = Duration(minutes: 10);
+  final Map<int, _SectionsCacheEntry> _sectionsCache = {};
 
   /// Mengambil seksi operasional tab ShortTV (tabId=13 untuk ShortTV/Sulih Suara Indonesia)
   Future<Map<String, List<DramaModel>>> fetchOperatingSections({
     int tabId = 13,
     bool forceRefresh = false,
   }) async {
-    if (!forceRefresh && _cachedSections != null && _cachedSections!.isNotEmpty) {
-      return _cachedSections!;
+    final cached = _sectionsCache[tabId];
+    if (!forceRefresh &&
+        cached != null &&
+        cached.sections.isNotEmpty &&
+        DateTime.now().difference(cached.fetchedAt) < _sectionsTtl) {
+      return cached.sections;
     }
 
     final sectionsMap = <String, List<DramaModel>>{};
@@ -433,138 +447,115 @@ class ShortTvService {
       }
     }
     if (sectionsMap.isNotEmpty) {
-      _cachedSections = sectionsMap;
+      _sectionsCache[tabId] = _SectionsCacheEntry(
+        sections: sectionsMap,
+        fetchedAt: DateTime.now(),
+      );
     }
     return sectionsMap;
   }
 
-  /// Mengambil katalog drama Beranda untuk 4 tab murni sesuai protokol server:
-  /// 1. 'untuk_anda': Dari kata kunci pencarian "sulih suara" (+ seksi sulih suara operasional)
-  /// 2. 'terbaru': Dari kata kunci pencarian "dubbing"
-  /// 3. 'terpanas': Dari kata kunci pencarian "versi dub"
-  /// 4. 'peringkat': Global all gudang konten (murni server operasional, bukan tembak pencarian)
-  Future<List<DramaModel>> getBerandaDramas({
+  /// Katalog drama Beranda per halaman, untuk 4 tab:
+  /// 1. 'untuk_anda': seksi sulih suara + pencarian "sulih suara"
+  /// 2. 'terbaru': seksi terbaru + pencarian "dubbing"
+  /// 3. 'terpanas': seksi trending + pencarian "versi dub"
+  /// 4. 'peringkat': semua seksi (diiris per halaman, tanpa request tambahan)
+  /// Halaman 1 memuat seksi + halaman pencarian pertama + varian keyword
+  /// (paralel); halaman 2-3 memuat halaman pencarian berikutnya.
+  /// Dedup antar halaman dilakukan pemanggil.
+  Future<List<DramaModel>> getBerandaDramasPage({
     required String tab,
+    required int page,
     bool forceRefresh = false,
   }) async {
-    final seen = <String>{};
-    final list = <DramaModel>[];
+    if (page < 1) return [];
 
     if (tab == 'untuk_anda') {
-      // 1. Seksi prioritas operasional tab 13 & tab 29
-      try {
-        final sections = await fetchOperatingSections(
-          tabId: 13,
-          forceRefresh: forceRefresh,
-        );
-        final dubSec = sections['🎧Drama Dubbing'] ?? [];
-        final lokalSec = sections['🇮🇩Lokal Short TV '] ?? [];
-        for (final d in [...dubSec, ...lokalSec]) {
-          if (seen.add(d.id)) list.add(d);
-        }
-      } catch (_) {}
-
-      // 2. Tembak pencarian kata kunci "sulih suara" & variasi
-      for (int p = 1; p <= 3; p++) {
-        try {
-          final res = await searchShortTv('sulih suara', page: p, perPage: 20);
-          if (res.isEmpty) break;
-          for (final d in res) {
-            if (seen.add(d.id)) list.add(d);
-          }
-        } catch (_) {}
+      if (page == 1) {
+        final (sections, sulih, sulihId, sulihV, suaraV) = await (
+          _safeSections(tabId: 13, forceRefresh: forceRefresh),
+          _safeSearch('sulih suara', page: 1),
+          _safeSearch('sulih suara indonesia', page: 1),
+          _safeSearch('sulih', page: 1),
+          _safeSearch('suara', page: 1),
+        ).wait;
+        return _dedupe([
+          ...sections['🎧Drama Dubbing'] ?? [],
+          ...sections['🇮🇩Lokal Short TV '] ?? [],
+          ...sulih,
+          ...sulihId,
+          ...sulihV,
+          ...suaraV,
+        ]);
       }
-      for (final kw in ['sulih suara indonesia', 'sulih', 'suara']) {
-        try {
-          final res = await searchShortTv(kw, page: 1, perPage: 20);
-          for (final d in res) {
-            if (seen.add(d.id)) list.add(d);
-          }
-        } catch (_) {}
-      }
-
-      return list;
-    } else if (tab == 'terbaru') {
-      // 1. Seksi operasional tab 13
-      try {
-        final sections = await fetchOperatingSections(
-          tabId: 13,
-          forceRefresh: forceRefresh,
-        );
-        final latestSec = sections['🎉Terbaru'] ?? [];
-        for (final d in latestSec) {
-          if (seen.add(d.id)) list.add(d);
-        }
-      } catch (_) {}
-
-      // 2. Tembak pencarian kata kunci "dubbing" & variasi
-      for (int p = 1; p <= 3; p++) {
-        try {
-          final res = await searchShortTv('dubbing', page: p, perPage: 20);
-          if (res.isEmpty) break;
-          for (final d in res) {
-            if (seen.add(d.id)) list.add(d);
-          }
-        } catch (_) {}
-      }
-      for (final kw in ['dubbing indo', 'dubbing indonesia', 'dub']) {
-        try {
-          final res = await searchShortTv(kw, page: 1, perPage: 20);
-          for (final d in res) {
-            if (seen.add(d.id)) list.add(d);
-          }
-        } catch (_) {}
-      }
-      return list;
-    } else if (tab == 'terpanas') {
-      // 1. Seksi operasional tab 13
-      try {
-        final sections = await fetchOperatingSections(
-          tabId: 13,
-          forceRefresh: forceRefresh,
-        );
-        final hotSec = sections['🔥Sedang Trending'] ?? [];
-        for (final d in hotSec) {
-          if (seen.add(d.id)) list.add(d);
-        }
-      } catch (_) {}
-
-      // 2. Tembak pencarian kata kunci "versi dub" & variasi
-      for (int p = 1; p <= 3; p++) {
-        try {
-          final res = await searchShortTv('versi dub', page: p, perPage: 20);
-          if (res.isEmpty) break;
-          for (final d in res) {
-            if (seen.add(d.id)) list.add(d);
-          }
-        } catch (_) {}
-      }
-      for (final kw in ['indonesian']) {
-        try {
-          final res = await searchShortTv(kw, page: 1, perPage: 20);
-          for (final d in res) {
-            if (seen.add(d.id)) list.add(d);
-          }
-        } catch (_) {}
-      }
-      return list;
-    } else {
-      // 'peringkat': Global all gudang konten (murni server operasional, bukan tembak pencarian)
-      final sections = await fetchOperatingSections(
-        tabId: 13,
-        forceRefresh: forceRefresh,
-      );
-      for (final dramaList in sections.values) {
-        for (final d in dramaList) {
-          if (seen.add(d.id)) list.add(d);
-        }
-      }
-      return list;
+      if (page <= 3) return _safeSearch('sulih suara', page: page);
+      return [];
     }
+
+    if (tab == 'terbaru') {
+      if (page == 1) {
+        final (sections, dub, dubIndo, dubId, dubV) = await (
+          _safeSections(tabId: 13, forceRefresh: forceRefresh),
+          _safeSearch('dubbing', page: 1),
+          _safeSearch('dubbing indo', page: 1),
+          _safeSearch('dubbing indonesia', page: 1),
+          _safeSearch('dub', page: 1),
+        ).wait;
+        return _dedupe([
+          ...sections['🎉Terbaru'] ?? [],
+          ...dub,
+          ...dubIndo,
+          ...dubId,
+          ...dubV,
+        ]);
+      }
+      if (page <= 3) return _safeSearch('dubbing', page: page);
+      return [];
+    }
+
+    if (tab == 'terpanas') {
+      if (page == 1) {
+        final (sections, versiDub, indonesian) = await (
+          _safeSections(tabId: 13, forceRefresh: forceRefresh),
+          _safeSearch('versi dub', page: 1),
+          _safeSearch('indonesian', page: 1),
+        ).wait;
+        return _dedupe([
+          ...sections['🔥Sedang Trending'] ?? [],
+          ...versiDub,
+          ...indonesian,
+        ]);
+      }
+      if (page <= 3) {
+        final (versiDub, indonesian) = await (
+          _safeSearch('versi dub', page: page),
+          _safeSearch('indonesian', page: page),
+        ).wait;
+        return _dedupe([...versiDub, ...indonesian]);
+      }
+      return [];
+    }
+
+    // 'peringkat': semua seksi digabung, diiris 30 item per halaman.
+    // Seksi di-cache (TTL 10 menit), jadi halaman 2+ tanpa request baru.
+    final sections = await _safeSections(
+      tabId: 13,
+      forceRefresh: forceRefresh,
+    );
+    final all = _dedupe(sections.values.expand((l) => l).toList());
+    const pageSize = 30;
+    final start = (page - 1) * pageSize;
+    if (start >= all.length) return [];
+    final end = (start + pageSize).clamp(0, all.length);
+    return all.sublist(start, end);
   }
 
-  /// Ambil daftar episode dan stream URL langsung dari ShortTV API:
-  /// Menggunakan batch chunking (10 item/chunk) hingga seluruh episode selesai dimuat
+  /// Ambil daftar episode dan stream URL langsung dari ShortTV API.
+  /// Chunk 10 episode, diambil per gelombang 3 chunk PARALEL (bukan satu
+  /// per satu). Berhenti di chunk pertama yang pendek/kosong — itu tanda
+  /// sudah sampai episode terakhir di server. Pemanggil yang butuh cepat
+  /// (player) cukup minta chunk pertama (endPosition 10), lalu minta
+  /// sisanya di latar belakang setelah video mulai main.
   Future<List<EpisodeModel>> fetchShortTvEpisodes(
     String subjectId, {
     int startPos = 1,
@@ -577,15 +568,31 @@ class ShortTvService {
     final all = <EpisodeModel>[];
     int cur = actualStart;
     while (cur <= actualEnd) {
-      final chunkStart = cur;
-      final chunkEnd = (cur + 9 <= actualEnd) ? cur + 9 : actualEnd;
-      final chunk = await _fetchSingleChunk(subjectId, chunkStart, chunkEnd);
-      if (chunk.isEmpty) break;
-      all.addAll(chunk);
-      if (chunk.length < (chunkEnd - chunkStart + 1)) {
-        break; // Sudah sampai episode terakhir di server
+      // Satu gelombang: sampai 3 chunk sekaligus.
+      final ranges = <(int, int)>[];
+      for (int i = 0; i < 3 && cur <= actualEnd; i++) {
+        final chunkEnd = (cur + 9 <= actualEnd) ? cur + 9 : actualEnd;
+        ranges.add((cur, chunkEnd));
+        cur = chunkEnd + 1;
       }
-      cur = chunkEnd + 1;
+      final chunks = await Future.wait(
+        ranges.map((r) => _fetchSingleChunk(subjectId, r.$1, r.$2)),
+      );
+      var reachedEnd = false;
+      for (int i = 0; i < chunks.length; i++) {
+        final chunk = chunks[i];
+        final expected = ranges[i].$2 - ranges[i].$1 + 1;
+        if (chunk.isEmpty) {
+          reachedEnd = true;
+          break;
+        }
+        all.addAll(chunk);
+        if (chunk.length < expected) {
+          reachedEnd = true;
+          break;
+        }
+      }
+      if (reachedEnd) break;
     }
     return all;
   }
@@ -744,4 +751,15 @@ class ShortTvService {
       episodes: const [],
     );
   }
+}
+
+/// Satu entri cache seksi: isi + kapan diambil (untuk TTL).
+class _SectionsCacheEntry {
+  final Map<String, List<DramaModel>> sections;
+  final DateTime fetchedAt;
+
+  const _SectionsCacheEntry({
+    required this.sections,
+    required this.fetchedAt,
+  });
 }
