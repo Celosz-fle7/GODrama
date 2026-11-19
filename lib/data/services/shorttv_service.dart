@@ -482,14 +482,14 @@ class ShortTvService {
     return sectionsMap;
   }
 
-  /// Katalog drama Beranda per halaman, terkelompokkan sesuai provider asli resmi:
-  /// 1. 'sulih_suara': Sulih Suara ID (Hub Dubbing Indonesia dari seluruh platform)
-  /// 2. 'dramabox': Hub DramaBox resmi
-  /// 3. 'shortmax': Hub ShortMax resmi
-  /// 4. 'goodshort': Hub GoodShort resmi
-  /// 5. 'reelshort': Hub ReelShort resmi
-  /// 6. 'netshort': Hub NetShort resmi
-  /// 7. 'lokal_indo': Hub Konten Lokal Indonesia (Vision+, dll)
+  /// Katalog drama Beranda per halaman, terkelompokkan sesuai kategori otentik server:
+  /// 1. 'sulih_suara': Sulih Suara ID (100% Dubbing Indonesia via classify: 'Indonesian dub')
+  /// 2. 'trending': Sedang Tren (sort: 'Hottest')
+  /// 3. 'terbaru': Rilis Terbaru (sort: 'Latest')
+  /// 4. 'lokal_indo': Lokal Indonesia & Vision+ (country: 'Indonesia')
+  /// 5. 'western': Cerita Barat & Werewolf ReelShort (country: 'United States')
+  /// 6. 'asian': Drama Asia & CEO ShortMax (country: 'China')
+  /// 7. 'top_rating': Rating Tertinggi Pilihan Penonton (sort: 'Rating')
   Future<List<DramaModel>> getBerandaDramasPage({
     required String tab,
     required int page,
@@ -503,70 +503,62 @@ class ShortTvService {
       case 'untuk_anda':
         return await fetchShortTvCatalog(
           classify: 'Indonesian dub',
-          sort: sort,
+          sort: 'Hottest',
           page: page,
           perPage: 15,
           defaultProviderBadge: 'Sulih Suara',
         );
-      case 'dramabox':
-        return await fetchShortTvCatalog(
-          classify: 'dramabox',
-          sort: sort,
-          page: page,
-          perPage: 15,
-          defaultProviderBadge: 'DramaBox',
-        );
-      case 'shortmax':
-        return await fetchShortTvCatalog(
-          classify: 'shortmax',
-          sort: sort,
-          page: page,
-          perPage: 15,
-          defaultProviderBadge: 'ShortMax',
-        );
-      case 'goodshort':
-        return await fetchShortTvCatalog(
-          classify: 'goodshort',
-          sort: sort,
-          page: page,
-          perPage: 15,
-          defaultProviderBadge: 'GoodShort',
-        );
-      case 'reelshort':
-      case 'western':
+      case 'trending':
       case 'terpanas':
         return await fetchShortTvCatalog(
-          classify: 'reelshort',
-          sort: sort,
+          sort: 'Hottest',
           page: page,
           perPage: 15,
-          defaultProviderBadge: 'ReelShort',
+          defaultProviderBadge: 'Trending',
         );
-      case 'netshort':
-        return await fetchShortTvCatalog(
-          classify: 'netshort',
-          sort: sort,
-          page: page,
-          perPage: 15,
-          defaultProviderBadge: 'NetShort',
-        );
-      case 'lokal_indo':
       case 'terbaru':
         return await fetchShortTvCatalog(
-          country: 'Indonesia',
-          sort: sort,
+          sort: 'Latest',
           page: page,
           perPage: 15,
-          defaultProviderBadge: 'Vision+',
+          defaultProviderBadge: 'Terbaru',
+        );
+      case 'lokal_indo':
+        return await fetchShortTvCatalog(
+          country: 'Indonesia',
+          sort: 'Hottest',
+          page: page,
+          perPage: 15,
+          defaultProviderBadge: 'Lokal ID',
+        );
+      case 'western':
+      case 'reelshort':
+        return await fetchShortTvCatalog(
+          country: 'United States',
+          sort: 'Hottest',
+          page: page,
+          perPage: 15,
+          defaultProviderBadge: 'Western',
         );
       case 'asian':
       case 'peringkat':
+      case 'shortmax':
+      case 'dramabox':
+      case 'goodshort':
+      case 'netshort':
         return await fetchShortTvCatalog(
-          classify: 'shortmax',
-          sort: sort,
+          country: 'China',
+          sort: 'Hottest',
           page: page,
           perPage: 15,
-          defaultProviderBadge: 'ShortMax',
+          defaultProviderBadge: 'Asian',
+        );
+      case 'top_rating':
+        return await fetchShortTvCatalog(
+          sort: 'Rating',
+          page: page,
+          perPage: 15,
+          defaultProviderBadge: 'Top Rating',
         );
       default:
         return await fetchShortTvCatalog(

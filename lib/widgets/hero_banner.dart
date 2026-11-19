@@ -267,9 +267,20 @@ class _HeroBannerState extends State<HeroBanner> {
       case 'netshort':
         return const Color(0xFF00B0FF);
       case 'vision+':
+      case 'lokal id':
         return const Color(0xFF0A84FF);
       case 'sulih suara':
         return const Color(0xFF7B1FA2);
+      case 'trending':
+        return const Color(0xFFFF3B30);
+      case 'terbaru':
+        return const Color(0xFF34C759);
+      case 'top rating':
+        return const Color(0xFFFF9500);
+      case 'western':
+        return const Color(0xFF5856D6);
+      case 'asian':
+        return const Color(0xFFFF2D55);
       default:
         return AppColors.primary;
     }
