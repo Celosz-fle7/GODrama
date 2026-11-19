@@ -68,8 +68,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Future<void> _setupVideo() async {
     if (_episodes.isEmpty && !_isLoadingEpisodes) {
       _isLoadingEpisodes = true;
+      final targetEps = widget.drama.totalEpisodes > 0
+          ? widget.drama.totalEpisodes
+          : 100;
       final liveEps = await ShortTvService.instance.fetchShortTvEpisodes(
         widget.drama.id,
+        startPos: 1,
+        endPosition: targetEps,
       );
       _isLoadingEpisodes = false;
       if (mounted && liveEps.isNotEmpty) {

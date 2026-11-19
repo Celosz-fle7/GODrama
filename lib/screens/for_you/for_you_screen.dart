@@ -139,7 +139,11 @@ class _ReelItem extends StatefulWidget {
   final DramaModel drama;
   final bool isActive;
 
-  const _ReelItem({required this.drama, required this.isActive});
+  const _ReelItem({
+    super.key,
+    required this.drama,
+    required this.isActive,
+  });
 
   @override
   State<_ReelItem> createState() => _ReelItemState();

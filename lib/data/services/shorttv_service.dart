@@ -296,7 +296,7 @@ class ShortTvService {
       }
     } catch (_) {}
 
-    // 2. Tarik kueri pencarian kata kunci "sulih suara" (halaman 1 s/d 3) & "sulih"
+    // 2. Tarik kueri pencarian kata kunci "sulih suara" & variasi
     for (int p = 1; p <= 3; p++) {
       try {
         final res = await searchShortTv('sulih suara', page: p, perPage: 20);
@@ -306,14 +306,16 @@ class ShortTvService {
         }
       } catch (_) {}
     }
-    try {
-      final res = await searchShortTv('sulih', page: 1, perPage: 20);
-      for (final d in res) {
-        if (seen.add(d.id)) sulihSuaraPool.add(d);
-      }
-    } catch (_) {}
+    for (final kw in ['sulih suara indonesia', 'sulih', 'suara']) {
+      try {
+        final res = await searchShortTv(kw, page: 1, perPage: 20);
+        for (final d in res) {
+          if (seen.add(d.id)) sulihSuaraPool.add(d);
+        }
+      } catch (_) {}
+    }
 
-    // 3. Tarik kueri pencarian kata kunci "dubbing" (halaman 1 s/d 3) & "dub"
+    // 3. Tarik kueri pencarian kata kunci "dubbing" & variasi
     for (int p = 1; p <= 3; p++) {
       try {
         final res = await searchShortTv('dubbing', page: p, perPage: 20);
@@ -323,12 +325,14 @@ class ShortTvService {
         }
       } catch (_) {}
     }
-    try {
-      final res = await searchShortTv('dub', page: 1, perPage: 20);
-      for (final d in res) {
-        if (seen.add(d.id)) dubbingPool.add(d);
-      }
-    } catch (_) {}
+    for (final kw in ['dubbing indo', 'dubbing indonesia', 'dub']) {
+      try {
+        final res = await searchShortTv(kw, page: 1, perPage: 20);
+        for (final d in res) {
+          if (seen.add(d.id)) dubbingPool.add(d);
+        }
+      } catch (_) {}
+    }
 
     // 4. Mix Rotasi: Interleave 1 Sulih Suara, 1 Dubbing secara berselang-seling
     final maxLen = sulihSuaraPool.length > dubbingPool.length
@@ -460,7 +464,7 @@ class ShortTvService {
         }
       } catch (_) {}
 
-      // 2. Tembak pencarian kata kunci "sulih suara" (halaman 1 s/d 3) & "sulih"
+      // 2. Tembak pencarian kata kunci "sulih suara" & variasi
       for (int p = 1; p <= 3; p++) {
         try {
           final res = await searchShortTv('sulih suara', page: p, perPage: 20);
@@ -470,12 +474,14 @@ class ShortTvService {
           }
         } catch (_) {}
       }
-      try {
-        final res = await searchShortTv('sulih', page: 1, perPage: 20);
-        for (final d in res) {
-          if (seen.add(d.id)) list.add(d);
-        }
-      } catch (_) {}
+      for (final kw in ['sulih suara indonesia', 'sulih', 'suara']) {
+        try {
+          final res = await searchShortTv(kw, page: 1, perPage: 20);
+          for (final d in res) {
+            if (seen.add(d.id)) list.add(d);
+          }
+        } catch (_) {}
+      }
 
       return list;
     } else if (tab == 'terbaru') {
@@ -491,7 +497,7 @@ class ShortTvService {
         }
       } catch (_) {}
 
-      // 2. Tembak pencarian kata kunci "dubbing" (halaman 1 s/d 3) & "dub"
+      // 2. Tembak pencarian kata kunci "dubbing" & variasi
       for (int p = 1; p <= 3; p++) {
         try {
           final res = await searchShortTv('dubbing', page: p, perPage: 20);
@@ -501,12 +507,14 @@ class ShortTvService {
           }
         } catch (_) {}
       }
-      try {
-        final res = await searchShortTv('dub', page: 1, perPage: 20);
-        for (final d in res) {
-          if (seen.add(d.id)) list.add(d);
-        }
-      } catch (_) {}
+      for (final kw in ['dubbing indo', 'dubbing indonesia', 'dub']) {
+        try {
+          final res = await searchShortTv(kw, page: 1, perPage: 20);
+          for (final d in res) {
+            if (seen.add(d.id)) list.add(d);
+          }
+        } catch (_) {}
+      }
       return list;
     } else if (tab == 'terpanas') {
       // 1. Seksi operasional tab 13
@@ -521,11 +529,19 @@ class ShortTvService {
         }
       } catch (_) {}
 
-      // 2. Tembak pencarian kata kunci "versi dub" (halaman 1 s/d 3)
+      // 2. Tembak pencarian kata kunci "versi dub" & variasi
       for (int p = 1; p <= 3; p++) {
         try {
           final res = await searchShortTv('versi dub', page: p, perPage: 20);
           if (res.isEmpty) break;
+          for (final d in res) {
+            if (seen.add(d.id)) list.add(d);
+          }
+        } catch (_) {}
+      }
+      for (final kw in ['indonesian']) {
+        try {
+          final res = await searchShortTv(kw, page: 1, perPage: 20);
           for (final d in res) {
             if (seen.add(d.id)) list.add(d);
           }
@@ -548,26 +564,28 @@ class ShortTvService {
   }
 
   /// Ambil daftar episode dan stream URL langsung dari ShortTV API:
-  /// Menggunakan batch chunking (10 item/chunk) karena gateway membatasi rentang request <= 15 (PARAMS_ERROR: exceed limit)
+  /// Menggunakan batch chunking (10 item/chunk) hingga seluruh episode selesai dimuat
   Future<List<EpisodeModel>> fetchShortTvEpisodes(
     String subjectId, {
-    int startPos = 0,
-    int endPosition = 20,
+    int startPos = 1,
+    int endPosition = 100,
   }) async {
-    final chunks = <Future<List<EpisodeModel>>>[];
-    int cur = startPos;
-    final limit = endPosition < startPos ? startPos + 10 : endPosition;
-    while (cur < limit) {
-      final chunkStart = cur;
-      final chunkEnd = (cur + 10 <= limit) ? cur + 10 : limit;
-      chunks.add(_fetchSingleChunk(subjectId, chunkStart, chunkEnd));
-      cur = chunkEnd + 1;
-    }
+    final actualStart = startPos <= 0 ? 1 : startPos;
+    final actualEnd =
+        endPosition < actualStart ? actualStart + 20 : endPosition;
 
-    final results = await Future.wait(chunks);
     final all = <EpisodeModel>[];
-    for (final r in results) {
-      all.addAll(r);
+    int cur = actualStart;
+    while (cur <= actualEnd) {
+      final chunkStart = cur;
+      final chunkEnd = (cur + 9 <= actualEnd) ? cur + 9 : actualEnd;
+      final chunk = await _fetchSingleChunk(subjectId, chunkStart, chunkEnd);
+      if (chunk.isEmpty) break;
+      all.addAll(chunk);
+      if (chunk.length < (chunkEnd - chunkStart + 1)) {
+        break; // Sudah sampai episode terakhir di server
+      }
+      cur = chunkEnd + 1;
     }
     return all;
   }
