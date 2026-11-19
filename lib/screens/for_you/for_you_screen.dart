@@ -60,6 +60,11 @@ class _ForYouScreenState extends State<ForYouScreen> {
 
   void _onReelAutoNext(int fromIndex) {
     if (fromIndex == _activeDramaIndex && _activeDramaIndex < _dramas.length - 1) {
+      if (_activeDramaIndex < _dramas.length) {
+        AppSettingsService.instance.recordPreviewImpression(
+          _dramas[_activeDramaIndex].id,
+        );
+      }
       if (_pageController.hasClients) {
         _pageController.nextPage(
           duration: const Duration(milliseconds: 400),
@@ -74,10 +79,11 @@ class _ForYouScreenState extends State<ForYouScreen> {
     final results = <DramaModel>[];
     int page = 1;
 
-    // Smart Discovery Filter: Sembunyikan drama yang sudah ditonton (>=10 eps)
-    // dan tahan drama yang baru dicoba (1-9 eps, cooldown 24 jam).
-    // Ambil page berikutnya jika ada drama yang difilter agar feed tetap penuh.
-    while (results.length < 10 && page <= 5) {
+    // Smart Discovery Filter: Sembunyikan drama yang sudah ditonton (>=10 eps),
+    // tahan drama yang baru dicoba (1-9 eps, cooldown 24 jam),
+    // dan tahan drama yang baru saja di-swipe lewat di cuplikan (cooldown 12 jam).
+    // Ambil page berikutnya otomatis agar feed di tangan user selalu konten segar!
+    while (results.length < 10 && page <= 12) {
       final live = await ShortTvService.instance.fetchForYouPage(
         page,
         sort: _selectedSort,
@@ -94,6 +100,17 @@ class _ForYouScreenState extends State<ForYouScreen> {
       _currentPage = page;
       page++;
       if (live.length < 10) break;
+    }
+
+    // Safety Fallback: Bila seluruh drama sedang dalam cooldown (misal user sudah swipe ratusan drama),
+    // muat ulang tanpa filter impresi agar feed tidak pernah kosong sama sekali.
+    if (results.isEmpty) {
+      final fallbackLive = await ShortTvService.instance.fetchForYouPage(
+        1,
+        sort: _selectedSort,
+      );
+      results.addAll(fallbackLive);
+      _currentPage = 1;
     }
 
     if (mounted) {
@@ -219,6 +236,12 @@ class _ForYouScreenState extends State<ForYouScreen> {
             scrollDirection: Axis.vertical,
             itemCount: _dramas.length,
             onPageChanged: (index) {
+              // Catat drama yang baru saja di-swipe lewat sebagai sudah diintip
+              if (_activeDramaIndex < _dramas.length) {
+                AppSettingsService.instance.recordPreviewImpression(
+                  _dramas[_activeDramaIndex].id,
+                );
+              }
               setState(() {
                 _activeDramaIndex = index;
               });
