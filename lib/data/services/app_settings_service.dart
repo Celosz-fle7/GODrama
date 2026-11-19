@@ -200,6 +200,26 @@ class AppSettingsService extends ChangeNotifier {
     return null;
   }
 
+  /// Memeriksa apakah sebuah drama harus disembunyikan sementara atau permanen dari feed For You:
+  /// 1. Ditonton >= 10 episode: Disembunyikan permanen (sudah tamat / tontonan serius, ada di Riwayat).
+  /// 2. Ditonton episode 1 s/d 9: Ditahan (cooldown) selama 24 jam sejak tontonan terakhir.
+  /// 3. Belum ditonton atau baru intip < 1 episode: Tetap tampil (fresh discovery).
+  bool shouldSuppressFromForYou(String dramaId) {
+    final progress = progressFor(dramaId);
+    if (progress == null) return false;
+
+    // Kriteria 1: Nonton >= 10 episode -> Sembunyikan permanen dari For You
+    if (progress.episodeIndex >= 10) return true;
+
+    // Kriteria 2: Nonton episode 1-9 -> Cooldown 24 jam
+    if (progress.episodeIndex >= 1) {
+      final hoursSince = DateTime.now().difference(progress.updatedAt).inHours;
+      if (hoursSince < 24) return true;
+    }
+
+    return false;
+  }
+
   void addToWatchHistory(DramaModel drama) {
     final existingIndex = _history.indexWhere((e) => e.drama.id == drama.id);
     // Entri lama dipertahankan progresnya, hanya naik ke paling atas
