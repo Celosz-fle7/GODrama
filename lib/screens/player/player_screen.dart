@@ -272,7 +272,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
       ),
       currentEpisodeIndex: _currentEpisodeIndex,
       onEpisodeSelected: (index) {
-        Navigator.pop(context);
         _selectEpisode(index);
       },
     );
