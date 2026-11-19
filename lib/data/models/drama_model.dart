@@ -11,6 +11,7 @@ class DramaModel {
   // null bila server tidak memberi rating — jangan diisi angka acak.
   final double? rating;
   final bool isTrending;
+  final String? providerBadge;
   final List<EpisodeModel> episodes;
 
   String get category => tags.isNotEmpty ? tags.first : 'Drama';
@@ -26,6 +27,7 @@ class DramaModel {
     required this.viewCount,
     this.rating,
     this.isTrending = false,
+    this.providerBadge,
     this.episodes = const [],
   });
 
@@ -40,6 +42,7 @@ class DramaModel {
     String? viewCount,
     double? rating,
     bool? isTrending,
+    String? providerBadge,
     List<EpisodeModel>? episodes,
   }) {
     return DramaModel(
@@ -53,6 +56,7 @@ class DramaModel {
       viewCount: viewCount ?? this.viewCount,
       rating: rating ?? this.rating,
       isTrending: isTrending ?? this.isTrending,
+      providerBadge: providerBadge ?? this.providerBadge,
       episodes: episodes ?? this.episodes,
     );
   }
@@ -71,6 +75,7 @@ class DramaModel {
       'viewCount': viewCount,
       'rating': rating,
       'isTrending': isTrending,
+      'providerBadge': providerBadge,
     };
   }
 
@@ -87,6 +92,7 @@ class DramaModel {
       viewCount: json['viewCount']?.toString() ?? '',
       rating: (json['rating'] as num?)?.toDouble(),
       isTrending: json['isTrending'] == true,
+      providerBadge: json['providerBadge']?.toString(),
     );
   }
 }

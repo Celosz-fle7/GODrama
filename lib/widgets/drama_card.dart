@@ -66,6 +66,34 @@ class DramaCard extends StatelessWidget {
                       ),
                     ),
                   ),
+                  // Provider badge top-left
+                  if (drama.providerBadge != null && drama.providerBadge!.isNotEmpty)
+                    Positioned(
+                      top: 6,
+                      left: 6,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withOpacity(0.85),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.2),
+                            width: 0.5,
+                          ),
+                        ),
+                        child: Text(
+                          drama.providerBadge!,
+                          style: const TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
                   // Episode badge top-right (hanya bila server memberi jumlah)
                   if (drama.totalEpisodes > 0)
                     Positioned(

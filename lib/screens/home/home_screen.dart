@@ -18,7 +18,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  String _selectedCategoryId = 'untuk_anda';
+  String _selectedCategoryId = 'sulih_suara';
   List<DramaModel> _dramas = [];
   bool _isLoading = true;
   // Pagination: halaman 1 dulu, halaman berikut saat scroll mendekati bawah.
@@ -28,16 +28,16 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _hasMore = false;
   bool _isLoadingMore = false;
 
-  // 4 Tab Beranda Sesuai Protokol:
-  // 1. Untuk Anda 🇮🇩: Pencarian keyword "sulih suara"
-  // 2. Terbaru ✨: Pencarian keyword "dubbing"
-  // 3. Terpanas 🔥: Pencarian keyword "versi dub"
-  // 4. Peringkat 👑: Global all gudang konten (murni server operasional)
+  // 4 Tab Beranda Berbasis Multi-Platform & Bahasa:
+  // 1. Sulih Suara ID 🎧: Hub DramaBox & NetShort (classify: 'Indonesian dub')
+  // 2. Lokal Indonesia 🇮🇩: Hub VisionPlus & ReelBuzz (country: 'Indonesia')
+  // 3. Western Drama 🐺: Hub ReelShort & US Drama (country: 'United States')
+  // 4. Asian Drama 👑: Hub GoodShort & ShortMax (country: 'China')
   final List<CategoryModel> _categories = const [
-    CategoryModel(id: 'untuk_anda', name: 'Untuk Anda 🇮🇩'),
-    CategoryModel(id: 'terbaru', name: 'Terbaru ✨'),
-    CategoryModel(id: 'terpanas', name: 'Terpanas 🔥'),
-    CategoryModel(id: 'peringkat', name: 'Peringkat 👑'),
+    CategoryModel(id: 'sulih_suara', name: 'Sulih Suara ID 🎧'),
+    CategoryModel(id: 'lokal_indo', name: 'Lokal Indonesia 🇮🇩'),
+    CategoryModel(id: 'western', name: 'Western Drama 🐺'),
+    CategoryModel(id: 'asian', name: 'Asian Drama 👑'),
   ];
 
   @override
@@ -109,12 +109,9 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  // Tab pencarian punya halaman 1-3; peringkat diiris 30/halaman jadi
-  // halaman penuh berarti mungkin masih ada lanjutannya.
+  // Paginasi kontinu tanpa batasan artifisial
   bool _pageHasMore(String tab, int page, List<DramaModel> results) {
-    if (results.isEmpty) return false;
-    if (tab == 'peringkat') return results.length >= 30;
-    return page < 3;
+    return results.isNotEmpty && results.length >= 10;
   }
 
   @override

@@ -28,6 +28,7 @@ class _ForYouScreenState extends State<ForYouScreen> {
   List<DramaModel> _dramas = [];
   int _activeDramaIndex = 0;
   bool _isLoading = true;
+  String _selectedSort = 'Hottest';
   // Pagination: halaman 1 dulu (cepat), halaman berikut saat swipe
   // mendekati akhir feed.
   final Set<String> _seenIds = {};
@@ -49,14 +50,30 @@ class _ForYouScreenState extends State<ForYouScreen> {
     }
   }
 
+  void _onSortChanged(String newSort) {
+    if (_selectedSort == newSort) return;
+    setState(() {
+      _selectedSort = newSort;
+      _isLoading = true;
+    });
+    if (_pageController.hasClients) {
+      _pageController.jumpToPage(0);
+    }
+    _loadLiveShortDramas();
+  }
+
   Future<void> _loadLiveShortDramas() async {
-    final live = await ShortTvService.instance.fetchForYouPage(1);
+    final live = await ShortTvService.instance.fetchForYouPage(
+      1,
+      sort: _selectedSort,
+    );
     if (mounted) {
       _seenIds
         ..clear()
         ..addAll(live.map((d) => d.id));
       setState(() {
         _dramas = live;
+        _activeDramaIndex = 0;
         _currentPage = 1;
         _hasMore = live.isNotEmpty;
         _isLoading = false;
@@ -68,16 +85,42 @@ class _ForYouScreenState extends State<ForYouScreen> {
     if (_isLoadingMore || !_hasMore) return;
     _isLoadingMore = true;
     final nextPage = _currentPage + 1;
-    final live = await ShortTvService.instance.fetchForYouPage(nextPage);
+    final live = await ShortTvService.instance.fetchForYouPage(
+      nextPage,
+      sort: _selectedSort,
+    );
     if (!mounted) return;
     final fresh = live.where((d) => _seenIds.add(d.id)).toList();
     setState(() {
       _dramas.addAll(fresh);
       _currentPage = nextPage;
-      // Feed punya halaman 1-3; halaman kosong = habis.
-      _hasMore = live.isNotEmpty && nextPage < 3;
+      _hasMore = live.isNotEmpty;
       _isLoadingMore = false;
     });
+  }
+
+  Widget _buildSortChip(String sortKey, String label) {
+    final isSelected = _selectedSort == sortKey;
+    return GestureDetector(
+      onTap: () => _onSortChanged(sortKey),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.primary : Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontFamily: 'Urbanist',
+            fontSize: 12,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+            color: isSelected ? Colors.white : Colors.white70,
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -138,26 +181,56 @@ class _ForYouScreenState extends State<ForYouScreen> {
 
     return Scaffold(
       backgroundColor: Colors.black,
-      body: PageView.builder(
-        controller: _pageController,
-        scrollDirection: Axis.vertical,
-        itemCount: _dramas.length,
-        onPageChanged: (index) {
-          setState(() {
-            _activeDramaIndex = index;
-          });
-          if (index >= _dramas.length - 3) _loadMore();
-        },
-        itemBuilder: (context, index) {
-          final drama = _dramas[index];
-          final isCurrent = widget.isActive && (index == _activeDramaIndex);
-          return _ReelItem(
-            key: ValueKey('${drama.id}_${widget.isActive}'),
-            drama: drama,
-            isActive: isCurrent,
-            isNext: widget.isActive && (index == _activeDramaIndex + 1),
-          );
-        },
+      body: Stack(
+        children: [
+          PageView.builder(
+            controller: _pageController,
+            scrollDirection: Axis.vertical,
+            itemCount: _dramas.length,
+            onPageChanged: (index) {
+              setState(() {
+                _activeDramaIndex = index;
+              });
+              if (index >= _dramas.length - 3) _loadMore();
+            },
+            itemBuilder: (context, index) {
+              final drama = _dramas[index];
+              final isCurrent = widget.isActive && (index == _activeDramaIndex);
+              return _ReelItem(
+                key: ValueKey('${drama.id}_${widget.isActive}'),
+                drama: drama,
+                isActive: isCurrent,
+                isNext: widget.isActive && (index == _activeDramaIndex + 1),
+              );
+            },
+          ),
+          // Top Sort Selector (Terpanas 🔥, Terbaru ✨, Rating 👑)
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 8,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.55),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: Colors.white12, width: 0.8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildSortChip('Hottest', 'Terpanas 🔥'),
+                    const SizedBox(width: 4),
+                    _buildSortChip('Latest', 'Terbaru ✨'),
+                    const SizedBox(width: 4),
+                    _buildSortChip('Rating', 'Rating 👑'),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

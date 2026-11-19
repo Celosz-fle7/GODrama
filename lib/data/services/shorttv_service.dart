@@ -347,55 +347,66 @@ class ShortTvService {
     return out;
   }
 
-  /// For You per halaman (mix rotasi sulih suara / dubbing, interleave 1:1).
-  /// Semua request dalam satu halaman jalan PARALEL (Future.wait), bukan
-  /// sekuensial — halaman 1 hanya butuh ~1x waktu request, bukan 13x.
-  /// Halaman 1 = seksi + sulih p1 + dubbing p1; halaman 2-3 = halaman
-  /// pencarian berikutnya + varian keyword. Di luar itu kosong.
-  /// Dedup antar halaman dilakukan pemanggil (layar menyimpan seen-set).
-  Future<List<DramaModel>> fetchForYouPage(int page) async {
+  /// Mengambil short drama dari Master Catalog resmi (POST /wefeed-mobile-bff/subject-api/list)
+  /// dengan subjectType: 7 (ShortTV / Mini Drama).
+  /// Mendukung filter resmi server: classify (Indonesian dub), country (Indonesia, United States, China),
+  /// dan sorting: 'Hottest', 'Latest', 'Rating'.
+  Future<List<DramaModel>> fetchShortTvCatalog({
+    String? classify,
+    String? country,
+    String sort = 'Hottest',
+    int page = 1,
+    int perPage = 15,
+  }) async {
     if (page < 1) return [];
-    if (page == 1) {
-      final (sections, sulih, dub) = await (
-        _safeSections(tabId: 13, forceRefresh: true),
-        _safeSearch('sulih suara', page: 1),
-        _safeSearch('dubbing', page: 1),
-      ).wait;
-      final sulihPool = <DramaModel>[
-        ...sections['🇮🇩Lokal Short TV '] ?? [],
-        ...sulih,
-      ];
-      final dubPool = <DramaModel>[
-        ...sections['🎧Drama Dubbing'] ?? [],
-        ...dub,
-      ];
-      return _interleave(_dedupe(sulihPool), _dedupe(dubPool));
+    final body = <String, dynamic>{
+      'subjectType': 7,
+      'sort': sort,
+      'page': page,
+      'perPage': perPage,
+    };
+    if (classify != null && classify.isNotEmpty) {
+      body['classify'] = classify;
     }
-    if (page == 2) {
-      final (sulih2, dub2, sulihVar, dubVar) = await (
-        _safeSearch('sulih suara', page: 2),
-        _safeSearch('dubbing', page: 2),
-        _safeSearch('sulih suara indonesia', page: 1),
-        _safeSearch('dubbing indo', page: 1),
-      ).wait;
-      final sulihPool = <DramaModel>[...sulih2, ...sulihVar];
-      final dubPool = <DramaModel>[...dub2, ...dubVar];
-      return _interleave(_dedupe(sulihPool), _dedupe(dubPool));
+    if (country != null && country.isNotEmpty) {
+      body['country'] = country;
     }
-    if (page == 3) {
-      final (sulih3, dub3, sulihV, suaraV, dubInd, dubV) = await (
-        _safeSearch('sulih suara', page: 3),
-        _safeSearch('dubbing', page: 3),
-        _safeSearch('sulih', page: 1),
-        _safeSearch('suara', page: 1),
-        _safeSearch('dubbing indonesia', page: 1),
-        _safeSearch('dub', page: 1),
-      ).wait;
-      final sulihPool = <DramaModel>[...sulih3, ...sulihV, ...suaraV];
-      final dubPool = <DramaModel>[...dub3, ...dubInd, ...dubV];
-      return _interleave(_dedupe(sulihPool), _dedupe(dubPool));
+
+    final resp = await _request(
+      'POST',
+      '/wefeed-mobile-bff/subject-api/list',
+      bodyJson: body,
+    );
+
+    if (resp != null &&
+        resp['code'] == 0 &&
+        resp['data'] is Map<String, dynamic>) {
+      final items = resp['data']['items'] as List?;
+      if (items != null && items.isNotEmpty) {
+        return items
+            .whereType<Map<String, dynamic>>()
+            .map(_mapToDramaModel)
+            .where((d) => d.id.isNotEmpty)
+            .toList();
+      }
     }
     return [];
+  }
+
+  /// For You Feed per halaman (Short drama berbahasa Indonesia dengan dynamic sorting).
+  /// Paginasi kontinu tanpa batasan buatan.
+  Future<List<DramaModel>> fetchForYouPage(
+    int page, {
+    String sort = 'Hottest',
+    int perPage = 10,
+  }) async {
+    if (page < 1) return [];
+    return await fetchShortTvCatalog(
+      classify: 'Indonesian dub',
+      sort: sort,
+      page: page,
+      perPage: perPage,
+    );
   }
 
   List<DramaModel> _dedupe(List<DramaModel> input) {
@@ -455,99 +466,60 @@ class ShortTvService {
     return sectionsMap;
   }
 
-  /// Katalog drama Beranda per halaman, untuk 4 tab:
-  /// 1. 'untuk_anda': seksi sulih suara + pencarian "sulih suara"
-  /// 2. 'terbaru': seksi terbaru + pencarian "dubbing"
-  /// 3. 'terpanas': seksi trending + pencarian "versi dub"
-  /// 4. 'peringkat': semua seksi (diiris per halaman, tanpa request tambahan)
-  /// Halaman 1 memuat seksi + halaman pencarian pertama + varian keyword
-  /// (paralel); halaman 2-3 memuat halaman pencarian berikutnya.
-  /// Dedup antar halaman dilakukan pemanggil.
+  /// Katalog drama Beranda per halaman, untuk 4 tab provider/bahasa:
+  /// 1. 'sulih_suara': Sulih Suara ID (DramaBox & NetShort Hub) -> classify: 'Indonesian dub'
+  /// 2. 'lokal_indo': Lokal Indonesia (VisionPlus & ReelBuzz Hub) -> country: 'Indonesia'
+  /// 3. 'western': Western Drama (ReelShort Hub) -> country: 'United States'
+  /// 4. 'asian': Asian Drama (GoodShort & ShortMax Hub) -> country: 'China'
   Future<List<DramaModel>> getBerandaDramasPage({
     required String tab,
     required int page,
+    String sort = 'Hottest',
     bool forceRefresh = false,
   }) async {
     if (page < 1) return [];
 
-    if (tab == 'untuk_anda') {
-      if (page == 1) {
-        final (sections, sulih, sulihId, sulihV, suaraV) = await (
-          _safeSections(tabId: 13, forceRefresh: forceRefresh),
-          _safeSearch('sulih suara', page: 1),
-          _safeSearch('sulih suara indonesia', page: 1),
-          _safeSearch('sulih', page: 1),
-          _safeSearch('suara', page: 1),
-        ).wait;
-        return _dedupe([
-          ...sections['🎧Drama Dubbing'] ?? [],
-          ...sections['🇮🇩Lokal Short TV '] ?? [],
-          ...sulih,
-          ...sulihId,
-          ...sulihV,
-          ...suaraV,
-        ]);
-      }
-      if (page <= 3) return _safeSearch('sulih suara', page: page);
-      return [];
+    switch (tab) {
+      case 'sulih_suara':
+      case 'untuk_anda':
+        return await fetchShortTvCatalog(
+          classify: 'Indonesian dub',
+          sort: sort,
+          page: page,
+          perPage: 15,
+        );
+      case 'lokal_indo':
+      case 'terbaru':
+        return await fetchShortTvCatalog(
+          country: 'Indonesia',
+          sort: sort,
+          page: page,
+          perPage: 15,
+        );
+      case 'western':
+      case 'terpanas':
+        return await fetchShortTvCatalog(
+          country: 'United States',
+          sort: sort,
+          page: page,
+          perPage: 15,
+        );
+      case 'asian':
+      case 'peringkat':
+        return await fetchShortTvCatalog(
+          country: 'China',
+          sort: sort,
+          page: page,
+          perPage: 15,
+        );
+      default:
+        return await fetchShortTvCatalog(
+          classify: 'Indonesian dub',
+          sort: sort,
+          page: page,
+          perPage: 15,
+        );
     }
-
-    if (tab == 'terbaru') {
-      if (page == 1) {
-        final (sections, dub, dubIndo, dubId, dubV) = await (
-          _safeSections(tabId: 13, forceRefresh: forceRefresh),
-          _safeSearch('dubbing', page: 1),
-          _safeSearch('dubbing indo', page: 1),
-          _safeSearch('dubbing indonesia', page: 1),
-          _safeSearch('dub', page: 1),
-        ).wait;
-        return _dedupe([
-          ...sections['🎉Terbaru'] ?? [],
-          ...dub,
-          ...dubIndo,
-          ...dubId,
-          ...dubV,
-        ]);
-      }
-      if (page <= 3) return _safeSearch('dubbing', page: page);
-      return [];
-    }
-
-    if (tab == 'terpanas') {
-      if (page == 1) {
-        final (sections, versiDub, indonesian) = await (
-          _safeSections(tabId: 13, forceRefresh: forceRefresh),
-          _safeSearch('versi dub', page: 1),
-          _safeSearch('indonesian', page: 1),
-        ).wait;
-        return _dedupe([
-          ...sections['🔥Sedang Trending'] ?? [],
-          ...versiDub,
-          ...indonesian,
-        ]);
-      }
-      if (page <= 3) {
-        final (versiDub, indonesian) = await (
-          _safeSearch('versi dub', page: page),
-          _safeSearch('indonesian', page: page),
-        ).wait;
-        return _dedupe([...versiDub, ...indonesian]);
-      }
-      return [];
-    }
-
-    // 'peringkat': semua seksi digabung, diiris 30 item per halaman.
-    // Seksi di-cache (TTL 10 menit), jadi halaman 2+ tanpa request baru.
-    final sections = await _safeSections(
-      tabId: 13,
-      forceRefresh: forceRefresh,
-    );
-    final all = _dedupe(sections.values.expand((l) => l).toList());
-    const pageSize = 30;
-    final start = (page - 1) * pageSize;
-    if (start >= all.length) return [];
-    final end = (start + pageSize).clamp(0, all.length);
-    return all.sublist(start, end);
   }
 
   /// Ambil daftar episode dan stream URL langsung dari ShortTV API.
@@ -733,7 +705,25 @@ class ShortTvService {
             : '$viewCountNum';
 
     // Tanpa rating dari server, null — jangan acak 4.5-4.9.
-    final rating = (json['rating'] as num?)?.toDouble();
+    // Jika server mengembalikan imdbRatingValue (skala 10), konversi ke skala 5.0 bintang.
+    final rawImdb = double.tryParse(json['imdbRatingValue']?.toString() ?? '');
+    final rating = (json['rating'] as num?)?.toDouble() ??
+        (rawImdb != null ? rawImdb / 2.0 : null);
+
+    // Deteksi provider badge berdasarkan metadata otentik server
+    String? badge;
+    final country = json['countryName']?.toString() ?? json['country']?.toString();
+    final classify = json['classify']?.toString() ?? '';
+    if (country == 'Indonesia') {
+      badge = 'Vision+';
+    } else if (classify.toLowerCase().contains('indonesian') ||
+        classify.toLowerCase().contains('dub')) {
+      badge = 'DramaBox';
+    } else if (country == 'United States') {
+      badge = 'ReelShort';
+    } else if (country == 'China') {
+      badge = 'GoodShort';
+    }
 
     return DramaModel(
       id: subjectId,
@@ -748,6 +738,7 @@ class ShortTvService {
           ? null
           : double.parse(rating.clamp(0.0, 5.0).toStringAsFixed(1)),
       isTrending: false,
+      providerBadge: badge,
       episodes: const [],
     );
   }
