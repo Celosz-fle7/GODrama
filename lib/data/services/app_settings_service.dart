@@ -83,27 +83,19 @@ class AppSettingsService extends ChangeNotifier {
   bool _initialized = false;
 
   String _defaultQuality = '1080p';
-  bool _dataSaverMode = false;
   bool _autoPlayNext = true;
-  bool _notificationsEnabled = true;
-  String _selectedLanguage = 'Bahasa Indonesia';
-  String _userName = 'GoDrama VIP';
+  String _userName = 'Tamu';
   String _userId = '';
-  int _avatarIndex = 0;
 
   final List<HistoryEntry> _history = [];
   // Favorit menyimpan objek drama lengkap, bukan hanya ID — daftar favorit
   // harus bisa tampil tanpa bergantung pada feed lain.
   final List<DramaModel> _favorites = [];
 
-  String get defaultQuality => _dataSaverMode ? '480p' : _defaultQuality;
-  bool get dataSaverMode => _dataSaverMode;
+  String get defaultQuality => _defaultQuality;
   bool get autoPlayNext => _autoPlayNext;
-  bool get notificationsEnabled => _notificationsEnabled;
-  String get selectedLanguage => _selectedLanguage;
   String get userName => _userName;
   String get userId => _userId;
-  int get avatarIndex => _avatarIndex;
   List<DramaModel> get watchHistory =>
       List.unmodifiable(_history.map((e) => e.drama));
   List<HistoryEntry> get historyEntries => List.unmodifiable(_history);
@@ -119,13 +111,23 @@ class AppSettingsService extends ChangeNotifier {
       _prefs = await SharedPreferences.getInstance();
       final p = _prefs!;
       _defaultQuality = p.getString('godrama_quality') ?? _defaultQuality;
-      _dataSaverMode = p.getBool('godrama_data_saver') ?? _dataSaverMode;
       _autoPlayNext = p.getBool('godrama_autoplay') ?? _autoPlayNext;
-      _notificationsEnabled =
-          p.getBool('godrama_notifications') ?? _notificationsEnabled;
-      _selectedLanguage = p.getString('godrama_language') ?? _selectedLanguage;
       _userName = p.getString('godrama_username') ?? _userName;
-      _avatarIndex = p.getInt('godrama_avatar') ?? _avatarIndex;
+
+      // Migrasi sekali jalan dari pengaturan lama yang sudah dihapus:
+      // Mode Hemat Kuota dulu hanya memaksa 480p — pindahkan ke kualitas.
+      if (p.getBool('godrama_data_saver') ?? false) {
+        _defaultQuality = '480p';
+        await p.setString('godrama_quality', '480p');
+      }
+      await p.remove('godrama_data_saver');
+      await p.remove('godrama_avatar');
+      // Nama default lama 'GoDrama VIP' mengklaim status VIP yang tidak
+      // ada — ganti ke 'Tamu' bila user belum pernah mengganti namanya.
+      if (_userName == 'GoDrama VIP') {
+        _userName = 'Tamu';
+        await p.setString('godrama_username', 'Tamu');
+      }
 
       // ID user dibuat sekali per instalasi, lalu dipakai seterusnya.
       _userId = p.getString('godrama_userid') ?? '';
@@ -156,8 +158,9 @@ class AppSettingsService extends ChangeNotifier {
               .where((d) => d.id.isNotEmpty),
         );
       }
-    } catch (_) {
+    } catch (e) {
       // Gagal baca storage bukan fatal: lanjut mode memori.
+      debugPrint('[AppSettingsService] Gagal baca storage: $e');
     }
     notifyListeners();
   }
@@ -178,39 +181,15 @@ class AppSettingsService extends ChangeNotifier {
     notifyListeners();
   }
 
-  void toggleDataSaver(bool enabled) {
-    _dataSaverMode = enabled;
-    _prefs?.setBool('godrama_data_saver', enabled);
-    notifyListeners();
-  }
-
   void toggleAutoPlayNext(bool enabled) {
     _autoPlayNext = enabled;
     _prefs?.setBool('godrama_autoplay', enabled);
     notifyListeners();
   }
 
-  void toggleNotifications(bool enabled) {
-    _notificationsEnabled = enabled;
-    _prefs?.setBool('godrama_notifications', enabled);
-    notifyListeners();
-  }
-
-  void setSelectedLanguage(String lang) {
-    _selectedLanguage = lang;
-    _prefs?.setString('godrama_language', lang);
-    notifyListeners();
-  }
-
   void updateProfileName(String name) {
     _userName = name;
     _prefs?.setString('godrama_username', name);
-    notifyListeners();
-  }
-
-  void setAvatarIndex(int index) {
-    _avatarIndex = index;
-    _prefs?.setInt('godrama_avatar', index);
     notifyListeners();
   }
 
