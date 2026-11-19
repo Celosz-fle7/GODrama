@@ -215,7 +215,9 @@ class ShortTvService {
       }
 
       if (bodyStr.isNotEmpty) {
-        request.add(utf8.encode(bodyStr));
+        final bodyBytes = utf8.encode(bodyStr);
+        request.contentLength = bodyBytes.length;
+        request.add(bodyBytes);
       }
 
       final response = await request.close();
@@ -234,9 +236,14 @@ class ShortTvService {
       if (response.statusCode == 200) {
         final respBody = await response.transform(utf8.decoder).join();
         return jsonDecode(respBody) as Map<String, dynamic>;
-      } else if (response.statusCode == 401) {
-        _token = null;
-        await _handshake();
+      } else {
+        final errBody = await response.transform(utf8.decoder).join();
+        debugPrint(
+            '[ShortTvService] HTTP ${response.statusCode} for $pathWithQuery: $errBody');
+        if (response.statusCode == 401) {
+          _token = null;
+          await _handshake();
+        }
       }
     } catch (_) {}
 

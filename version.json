@@ -1,8 +1,8 @@
 {
-  "version_code": 10,
-  "version_name": "1.0.9",
+  "version_code": 11,
+  "version_name": "1.0.10",
   "is_force_update": false,
-  "title": "Pembaruan GoDrama v1.0.9!",
-  "changelog": "- Tab Beranda 4 Tab Murni: Untuk Anda (pencarian sulih suara), Terbaru (pencarian dubbing), Terpanas (pencarian versi dub), Peringkat (Global all gudang konten operasional server)\n- Tab For You Mix Rotasi: Feed reel video kini otomatis mengombinasikan rotasi bergantian dari katalog dubbing dan sulih suara secara berselang-seling\n- Tanpa sub-filter & tanpa header mengambang yang membingungkan",
-  "download_url": "https://github.com/Celosz-fle7/GODrama/releases/download/v1.0.9/GoDrama-v1.0.9-release.apk"
+  "title": "Pembaruan GoDrama v1.0.10!",
+  "changelog": "- Perbaikan Kritis Kueri Pencarian POST: Menetapkan contentLength eksplisit pada payload HTTP Dart agar signature HMAC-MD5 gateway Istio-Envoy 100% valid dan semua tab pencarian terisi penuh\n- 4 Tab Beranda: Untuk Anda (sulih suara), Terbaru (dubbing), Terpanas (versi dub), Peringkat (Global All Gudang Konten)\n- Tab For You: Mix rotasi berselang-seling dari sulih suara dan dubbing",
+  "download_url": "https://github.com/Celosz-fle7/GODrama/releases/download/v1.0.10/GoDrama-v1.0.10-release.apk"
 }
