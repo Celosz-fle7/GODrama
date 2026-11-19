@@ -383,6 +383,100 @@ class ShortTvService {
     return sectionsMap;
   }
 
+  /// Mengambil daftar drama berdasarkan main tab (untuk_anda, terpanas, terbaru, peringkat)
+  /// dan sub-filter genre (Semua, CEO, Balas Dendam, Romansa & Nikah, Fantasi & Legenda)
+  Future<List<DramaModel>> getFilteredDramas({
+    required String mainTab,
+    String genreFilter = 'Semua',
+    bool forceRefresh = false,
+  }) async {
+    final sections = await fetchOperatingSections(
+      tabId: 13,
+      forceRefresh: forceRefresh,
+    );
+
+    List<DramaModel> baseList = [];
+    if (mainTab == 'untuk_anda') {
+      final seen = <String>{};
+      final indo = sections['🇮🇩Lokal Short TV '] ?? [];
+      final dub = sections['🎧Drama Dubbing'] ?? [];
+      for (final d in [...indo, ...dub]) {
+        if (seen.add(d.id)) baseList.add(d);
+      }
+    } else if (mainTab == 'terpanas') {
+      baseList = sections['🔥Sedang Trending'] ?? sections['Sedang Tren'] ?? [];
+    } else if (mainTab == 'terbaru') {
+      baseList = sections['🎉Terbaru'] ?? [];
+    } else if (mainTab == 'peringkat') {
+      baseList = sections['👑Tokoh Legendaris'] ?? [];
+    }
+
+    if (baseList.isEmpty) {
+      baseList = sections.values.expand((x) => x).toList();
+    }
+
+    if (genreFilter == 'Semua' || genreFilter.isEmpty) {
+      return baseList;
+    }
+
+    final lower = genreFilter.toLowerCase();
+    List<DramaModel> filtered = [];
+
+    if (lower.contains('ceo')) {
+      final ceoList = sections['💕CEO'] ?? [];
+      final seen = <String>{};
+      filtered = [
+        ...ceoList,
+        ...baseList.where((d) =>
+            d.title.toLowerCase().contains('ceo') ||
+            d.title.toLowerCase().contains('presdir') ||
+            d.title.toLowerCase().contains('miliarder')),
+      ].where((d) => seen.add(d.id)).toList();
+    } else if (lower.contains('balas') || lower.contains('dendam')) {
+      final seen = <String>{};
+      final all = sections.values.expand((x) => x);
+      filtered = all
+          .where((d) {
+            final t = d.title.toLowerCase();
+            final desc = d.description.toLowerCase();
+            return t.contains('balas') ||
+                t.contains('dendam') ||
+                t.contains('rahasia') ||
+                t.contains('bucin') ||
+                t.contains('menoleh') ||
+                desc.contains('balas') ||
+                desc.contains('dendam');
+          })
+          .where((d) => seen.add(d.id))
+          .toList();
+    } else if (lower.contains('romansa') || lower.contains('nikah')) {
+      final seen = <String>{};
+      final all = sections.values.expand((x) => x);
+      filtered = all
+          .where((d) {
+            final t = d.title.toLowerCase();
+            final desc = d.description.toLowerCase();
+            return t.contains('cinta') ||
+                t.contains('pacar') ||
+                t.contains('istri') ||
+                t.contains('suami') ||
+                t.contains('sayang') ||
+                t.contains('nyonya') ||
+                desc.contains('cinta');
+          })
+          .where((d) => seen.add(d.id))
+          .toList();
+    } else if (lower.contains('fantasi') || lower.contains('legenda')) {
+      final legList = sections['👑Tokoh Legendaris'] ?? [];
+      final animList = sections['🌟Animasi'] ?? [];
+      final seen = <String>{};
+      filtered =
+          [...legList, ...animList].where((d) => seen.add(d.id)).toList();
+    }
+
+    return filtered.isNotEmpty ? filtered : baseList;
+  }
+
   /// Ambil daftar episode dan stream URL langsung dari ShortTV API:
   /// Menggunakan batch chunking (10 item/chunk) karena gateway membatasi rentang request <= 15 (PARAMS_ERROR: exceed limit)
   Future<List<EpisodeModel>> fetchShortTvEpisodes(
