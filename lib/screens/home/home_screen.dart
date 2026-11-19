@@ -18,26 +18,15 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  String _selectedCategoryId = 'untuk_anda';
-  String _selectedGenre = 'Semua';
+  String _selectedCategoryId = 'sulih_suara';
   List<DramaModel> _dramas = [];
   bool _isLoading = true;
 
-  // 4 Tab Utama Ramping & Bersih
+  // 3 Tab Utama Beranda Murni: Sulih Suara, Versi Sub, dan Gudang Global
   final List<CategoryModel> _categories = const [
-    CategoryModel(id: 'untuk_anda', name: 'Untuk Anda 🇮🇩'),
-    CategoryModel(id: 'terpanas', name: 'Terpanas 🔥'),
-    CategoryModel(id: 'terbaru', name: 'Terbaru ✨'),
-    CategoryModel(id: 'peringkat', name: 'Peringkat 👑'),
-  ];
-
-  // Permainan Sub-Filter Genre (Akar Cangkang)
-  final List<String> _genreFilters = const [
-    'Semua',
-    '💕 CEO',
-    '🔥 Balas Dendam',
-    '💍 Romansa & Nikah',
-    '👑 Fantasi & Legenda',
+    CategoryModel(id: 'sulih_suara', name: 'Sulih Suara 🇮🇩'),
+    CategoryModel(id: 'versi_sub', name: 'Versi Sub 📝'),
+    CategoryModel(id: 'global', name: 'Global 🌐'),
   ];
 
   @override
@@ -48,9 +37,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _loadDramas({bool forceRefresh = false}) async {
     setState(() => _isLoading = true);
-    final list = await ShortTvService.instance.getFilteredDramas(
-      mainTab: _selectedCategoryId,
-      genreFilter: _selectedGenre,
+    final list = await ShortTvService.instance.getBerandaDramas(
+      tab: _selectedCategoryId,
       forceRefresh: forceRefresh,
     );
 
@@ -173,7 +161,6 @@ class _HomeScreenState extends State<HomeScreen> {
                           if (_selectedCategoryId != category.id) {
                             setState(() {
                               _selectedCategoryId = category.id;
-                              _selectedGenre = 'Semua';
                             });
                             _loadDramas();
                           }
@@ -218,70 +205,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
-              // Sub-Filter Genre (Akar Cangkang Permainan Filter)
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 10),
-                  child: SizedBox(
-                    height: 32,
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      itemCount: _genreFilters.length,
-                      itemBuilder: (context, index) {
-                        final genre = _genreFilters[index];
-                        final isSelected = genre == _selectedGenre;
-
-                        return GestureDetector(
-                          onTap: () {
-                            if (_selectedGenre != genre) {
-                              setState(() {
-                                _selectedGenre = genre;
-                              });
-                              _loadDramas();
-                            }
-                          },
-                          child: Container(
-                            margin: const EdgeInsets.only(right: 8),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? AppColors.primary.withOpacity(0.18)
-                                  : AppColors.surface.withOpacity(0.6),
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: isSelected
-                                    ? AppColors.primary
-                                    : AppColors.divider.withOpacity(0.5),
-                                width: isSelected ? 1.0 : 0.6,
-                              ),
-                            ),
-                            child: Center(
-                              child: Text(
-                                genre,
-                                style: TextStyle(
-                                  fontFamily: 'Urbanist',
-                                  fontSize: 12,
-                                  fontWeight: isSelected
-                                      ? FontWeight.w700
-                                      : FontWeight.w500,
-                                  color: isSelected
-                                      ? AppColors.primary
-                                      : AppColors.textSecondary,
-                                ),
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ),
-              ),
-
               // Section Title
               SliverToBoxAdapter(
                 child: Padding(
@@ -290,14 +213,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        _selectedGenre == 'Semua'
-                            ? _categories
-                                .firstWhere(
-                                  (c) => c.id == _selectedCategoryId,
-                                  orElse: () => _categories.first,
-                                )
-                                .name
-                            : '${_categories.firstWhere((c) => c.id == _selectedCategoryId, orElse: () => _categories.first).name} • $_selectedGenre',
+                        _categories
+                            .firstWhere(
+                              (c) => c.id == _selectedCategoryId,
+                              orElse: () => _categories.first,
+                            )
+                            .name,
                         style: const TextStyle(
                           fontFamily: 'Urbanist',
                           fontSize: 18,

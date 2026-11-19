@@ -383,11 +383,12 @@ class ShortTvService {
     return sectionsMap;
   }
 
-  /// Mengambil daftar drama berdasarkan main tab (untuk_anda, terpanas, terbaru, peringkat)
-  /// dan sub-filter genre (Semua, CEO, Balas Dendam, Romansa & Nikah, Fantasi & Legenda)
-  Future<List<DramaModel>> getFilteredDramas({
-    required String mainTab,
-    String genreFilter = 'Semua',
+  /// Mengambil katalog drama Beranda untuk 3 tab murni (tanpa sub-filter):
+  /// 1. 'sulih_suara': Gudang penuh drama sulih suara / dubbing Indonesia (ratusan judul)
+  /// 2. 'versi_sub': Drama versi subtitle / audio asli teks Indonesia
+  /// 3. 'global': Tembak gudang campur seluruh drama global dari semua genre
+  Future<List<DramaModel>> getBerandaDramas({
+    required String tab,
     bool forceRefresh = false,
   }) async {
     final sections = await fetchOperatingSections(
@@ -395,86 +396,74 @@ class ShortTvService {
       forceRefresh: forceRefresh,
     );
 
-    List<DramaModel> baseList = [];
-    if (mainTab == 'untuk_anda') {
-      final seen = <String>{};
-      final indo = sections['🇮🇩Lokal Short TV '] ?? [];
+    final seen = <String>{};
+    final list = <DramaModel>[];
+
+    if (tab == 'sulih_suara') {
+      // 1. Seksi prioritas Sulih Suara & Lokal
       final dub = sections['🎧Drama Dubbing'] ?? [];
-      for (final d in [...indo, ...dub]) {
-        if (seen.add(d.id)) baseList.add(d);
+      final lokal = sections['🇮🇩Lokal Short TV '] ?? [];
+      for (final d in [...dub, ...lokal]) {
+        if (seen.add(d.id)) list.add(d);
       }
-    } else if (mainTab == 'terpanas') {
-      baseList = sections['🔥Sedang Trending'] ?? sections['Sedang Tren'] ?? [];
-    } else if (mainTab == 'terbaru') {
-      baseList = sections['🎉Terbaru'] ?? [];
-    } else if (mainTab == 'peringkat') {
-      baseList = sections['👑Tokoh Legendaris'] ?? [];
+
+      // 2. Tambah dari semua seksi lain yang berjudul/berdeskripsi Sulih Suara / Dubbing
+      for (final dramaList in sections.values) {
+        for (final d in dramaList) {
+          final t = d.title.toLowerCase();
+          final desc = d.description.toLowerCase();
+          if (t.contains('sulih suara') ||
+              t.contains('dubbing') ||
+              desc.contains('sulih suara') ||
+              desc.contains('dubbing')) {
+            if (seen.add(d.id)) list.add(d);
+          }
+        }
+      }
+
+      // 3. Tarik pencarian keyword 'Sulih Suara' dan 'Dubbing' untuk memperkaya hingga ratusan judul
+      try {
+        final dub1 = await searchShortTv('Sulih Suara', perPage: 20);
+        for (final d in dub1) {
+          if (seen.add(d.id)) list.add(d);
+        }
+        final dub2 = await searchShortTv('Dubbing', perPage: 20);
+        for (final d in dub2) {
+          if (seen.add(d.id)) list.add(d);
+        }
+      } catch (_) {}
+
+      // Jika masih sedikit, sertakan seksi trending
+      if (list.length < 20) {
+        final trending = sections['🔥Sedang Trending'] ?? [];
+        for (final d in trending) {
+          if (seen.add(d.id)) list.add(d);
+        }
+      }
+      return list;
+    } else if (tab == 'versi_sub') {
+      // Drama versi subtitle (teks Indonesia / audio asli)
+      for (final entry in sections.entries) {
+        if (entry.key.contains('Dubbing') || entry.key.contains('Lokal')) {
+          continue;
+        }
+        for (final d in entry.value) {
+          final t = d.title.toLowerCase();
+          if (!t.contains('sulih suara') && !t.contains('dubbing')) {
+            if (seen.add(d.id)) list.add(d);
+          }
+        }
+      }
+      return list;
+    } else {
+      // 'global': Tembak gudang campur seluruh drama dari semua seksi operasional tanpa filter
+      for (final dramaList in sections.values) {
+        for (final d in dramaList) {
+          if (seen.add(d.id)) list.add(d);
+        }
+      }
+      return list;
     }
-
-    if (baseList.isEmpty) {
-      baseList = sections.values.expand((x) => x).toList();
-    }
-
-    if (genreFilter == 'Semua' || genreFilter.isEmpty) {
-      return baseList;
-    }
-
-    final lower = genreFilter.toLowerCase();
-    List<DramaModel> filtered = [];
-
-    if (lower.contains('ceo')) {
-      final ceoList = sections['💕CEO'] ?? [];
-      final seen = <String>{};
-      filtered = [
-        ...ceoList,
-        ...baseList.where((d) =>
-            d.title.toLowerCase().contains('ceo') ||
-            d.title.toLowerCase().contains('presdir') ||
-            d.title.toLowerCase().contains('miliarder')),
-      ].where((d) => seen.add(d.id)).toList();
-    } else if (lower.contains('balas') || lower.contains('dendam')) {
-      final seen = <String>{};
-      final all = sections.values.expand((x) => x);
-      filtered = all
-          .where((d) {
-            final t = d.title.toLowerCase();
-            final desc = d.description.toLowerCase();
-            return t.contains('balas') ||
-                t.contains('dendam') ||
-                t.contains('rahasia') ||
-                t.contains('bucin') ||
-                t.contains('menoleh') ||
-                desc.contains('balas') ||
-                desc.contains('dendam');
-          })
-          .where((d) => seen.add(d.id))
-          .toList();
-    } else if (lower.contains('romansa') || lower.contains('nikah')) {
-      final seen = <String>{};
-      final all = sections.values.expand((x) => x);
-      filtered = all
-          .where((d) {
-            final t = d.title.toLowerCase();
-            final desc = d.description.toLowerCase();
-            return t.contains('cinta') ||
-                t.contains('pacar') ||
-                t.contains('istri') ||
-                t.contains('suami') ||
-                t.contains('sayang') ||
-                t.contains('nyonya') ||
-                desc.contains('cinta');
-          })
-          .where((d) => seen.add(d.id))
-          .toList();
-    } else if (lower.contains('fantasi') || lower.contains('legenda')) {
-      final legList = sections['👑Tokoh Legendaris'] ?? [];
-      final animList = sections['🌟Animasi'] ?? [];
-      final seen = <String>{};
-      filtered =
-          [...legList, ...animList].where((d) => seen.add(d.id)).toList();
-    }
-
-    return filtered.isNotEmpty ? filtered : baseList;
   }
 
   /// Ambil daftar episode dan stream URL langsung dari ShortTV API:

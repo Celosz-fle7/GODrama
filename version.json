@@ -1,8 +1,8 @@
 {
-  "version_code": 7,
-  "version_name": "1.0.6",
+  "version_code": 8,
+  "version_name": "1.0.7",
   "is_force_update": false,
-  "title": "Pembaruan GoDrama v1.0.6!",
-  "changelog": "- 4 Tab Utama Ramping: Beranda kini memiliki 4 tab utama bersih (Untuk Anda 🇮🇩, Terpanas 🔥, Terbaru ✨, Peringkat 👑)\n- Akar Cangkang Sub-Filter Genre: Filter interaktif per-tab (Semua, 💕 CEO, 🔥 Balas Dendam, 💍 Romansa & Nikah, 👑 Fantasi & Legenda)\n- Rotasi Server Dinamis: Konten selalu mengikuti feed server terbaru, pull-to-refresh langsung menyegarkan urutan drama\n- Filter Cepat Tab For You: Pilihan mood & genre mengambang di atas feed video reel",
-  "download_url": "https://github.com/Celosz-fle7/GODrama/releases/download/v1.0.6/GoDrama-v1.0.6-release.apk"
+  "title": "Pembaruan GoDrama v1.0.7!",
+  "changelog": "- Tab Beranda Bersih & Tuntas: 3 tab murni tanpa sub-filter membingungkan: 'Sulih Suara 🇮🇩' (ratusan drama dubbing Indonesia), 'Versi Sub 📝' (teks Indonesia/audio asli), dan 'Global 🌐' (gudang campur seluruh drama global)\n- Tab For You Bersih & Murni: Seluruh bar filter atas dihapus, tampilan reel vertikal 100% mulus dan imersif\n- Tombol Tonton Semua Episode: Interaksi tombol episode lebih responsif dan langsung membuka pemutar penuh",
+  "download_url": "https://github.com/Celosz-fle7/GODrama/releases/download/v1.0.7/GoDrama-v1.0.7-release.apk"
 }

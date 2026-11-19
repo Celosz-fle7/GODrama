@@ -30,155 +30,43 @@ class _ForYouScreenState extends State<ForYouScreen> {
   int _activeDramaIndex = 0;
   bool _isLoading = true;
 
-  String _selectedFilter = 'Untuk Anda 🇮🇩';
-  final List<String> _filters = const [
-    'Untuk Anda 🇮🇩',
-    'Terpanas 🔥',
-    'Terbaru ✨',
-    'CEO 💕',
-    'Balas Dendam ⚔️',
-    'Romansa 💍',
-  ];
-
   @override
   void initState() {
     super.initState();
-    _loadFilteredFeed();
+    _loadLiveShortDramas();
   }
 
-  Future<void> _loadFilteredFeed({bool forceRefresh = false}) async {
-    setState(() => _isLoading = true);
-    String mainTab = 'untuk_anda';
-    String genre = 'Semua';
-
-    if (_selectedFilter == 'Terpanas 🔥') {
-      mainTab = 'terpanas';
-    } else if (_selectedFilter == 'Terbaru ✨') {
-      mainTab = 'terbaru';
-    } else if (_selectedFilter == 'CEO 💕') {
-      genre = '💕 CEO';
-    } else if (_selectedFilter == 'Balas Dendam ⚔️') {
-      genre = '🔥 Balas Dendam';
-    } else if (_selectedFilter == 'Romansa 💍') {
-      genre = '💍 Romansa & Nikah';
-    }
-
-    final live = await ShortTvService.instance.getFilteredDramas(
-      mainTab: mainTab,
-      genreFilter: genre,
-      forceRefresh: forceRefresh,
-    );
-
+  Future<void> _loadLiveShortDramas() async {
+    final live = await ShortTvService.instance.fetchForYouAlgorithm();
     if (mounted) {
       setState(() {
         _dramas = live;
-        _activeDramaIndex = 0;
         _isLoading = false;
       });
-      if (_pageController.hasClients) {
-        _pageController.jumpToPage(0);
-      }
     }
-  }
-
-  Widget _buildFilterBar() {
-    return Positioned(
-      top: MediaQuery.of(context).padding.top + 8,
-      left: 0,
-      right: 0,
-      child: SizedBox(
-        height: 34,
-        child: ListView.builder(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          itemCount: _filters.length,
-          itemBuilder: (context, index) {
-            final filter = _filters[index];
-            final isSelected = filter == _selectedFilter;
-
-            return GestureDetector(
-              onTap: () {
-                if (_selectedFilter != filter) {
-                  setState(() {
-                    _selectedFilter = filter;
-                  });
-                  _loadFilteredFeed();
-                }
-              },
-              child: Container(
-                margin: const EdgeInsets.only(right: 8),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? AppColors.primary
-                      : Colors.black.withOpacity(0.55),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: isSelected
-                        ? AppColors.primary
-                        : Colors.white.withOpacity(0.2),
-                    width: 0.8,
-                  ),
-                  boxShadow: isSelected
-                      ? [
-                          BoxShadow(
-                            color: AppColors.primary.withOpacity(0.4),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
-                          ),
-                        ]
-                      : null,
-                ),
-                child: Center(
-                  child: Text(
-                    filter,
-                    style: TextStyle(
-                      fontFamily: 'Urbanist',
-                      fontSize: 12,
-                      fontWeight: isSelected
-                          ? FontWeight.w800
-                          : FontWeight.w600,
-                      color: isSelected ? Colors.white : Colors.white70,
-                    ),
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return Scaffold(
+      return const Scaffold(
         backgroundColor: Colors.black,
-        body: Stack(
-          children: [
-            const Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircularProgressIndicator(color: AppColors.primary),
-                  SizedBox(height: 14),
-                  Text(
-                    'Memuat Cuplikan Drama Indonesia...',
-                    style: TextStyle(
-                      fontFamily: 'Urbanist',
-                      fontSize: 13,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(color: AppColors.primary),
+              SizedBox(height: 14),
+              Text(
+                'Memuat Cuplikan Drama Indonesia...',
+                style: TextStyle(
+                  fontFamily: 'Urbanist',
+                  fontSize: 13,
+                  color: AppColors.textSecondary,
+                ),
               ),
-            ),
-            _buildFilterBar(),
-          ],
+            ],
+          ),
         ),
       );
     }
@@ -186,59 +74,50 @@ class _ForYouScreenState extends State<ForYouScreen> {
     if (_dramas.isEmpty) {
       return Scaffold(
         backgroundColor: Colors.black,
-        body: Stack(
-          children: [
-            Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    Icons.wifi_off_rounded,
-                    color: AppColors.textMuted,
-                    size: 48,
-                  ),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'Gagal memuat feed cuplikan',
-                    style: TextStyle(color: Colors.white, fontFamily: 'Urbanist'),
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () {
-                      _loadFilteredFeed();
-                    },
-                    child: const Text('Coba Lagi'),
-                  ),
-                ],
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.wifi_off_rounded,
+                color: AppColors.textMuted,
+                size: 48,
               ),
-            ),
-            _buildFilterBar(),
-          ],
+              const SizedBox(height: 12),
+              const Text(
+                'Gagal memuat feed cuplikan',
+                style: TextStyle(color: Colors.white, fontFamily: 'Urbanist'),
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () {
+                  setState(() => _isLoading = true);
+                  _loadLiveShortDramas();
+                },
+                child: const Text('Coba Lagi'),
+              ),
+            ],
+          ),
         ),
       );
     }
 
     return Scaffold(
       backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          PageView.builder(
-            controller: _pageController,
-            scrollDirection: Axis.vertical,
-            itemCount: _dramas.length,
-            onPageChanged: (index) {
-              setState(() {
-                _activeDramaIndex = index;
-              });
-            },
-            itemBuilder: (context, index) {
-              final drama = _dramas[index];
-              final isCurrent = widget.isActive && (index == _activeDramaIndex);
-              return _ReelItem(drama: drama, isActive: isCurrent);
-            },
-          ),
-          _buildFilterBar(),
-        ],
+      body: PageView.builder(
+        controller: _pageController,
+        scrollDirection: Axis.vertical,
+        itemCount: _dramas.length,
+        onPageChanged: (index) {
+          setState(() {
+            _activeDramaIndex = index;
+          });
+        },
+        itemBuilder: (context, index) {
+          final drama = _dramas[index];
+          final isCurrent = widget.isActive && (index == _activeDramaIndex);
+          return _ReelItem(drama: drama, isActive: isCurrent);
+        },
       ),
     );
   }
@@ -569,7 +448,7 @@ class _ReelItemState extends State<_ReelItem> {
         if (!_clearViewMode) ...[
           // Top Left: Badge Cuplikan Teaser & Gateway
           Positioned(
-            top: MediaQuery.of(context).padding.top + 48,
+            top: MediaQuery.of(context).padding.top + 14,
             left: 16,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -612,6 +491,7 @@ class _ReelItemState extends State<_ReelItem> {
               children: [
                 // TOMBOL UTAMA: "Tonton Semua Episode" (Kunci pengalaman pengguna)
                 GestureDetector(
+                  behavior: HitTestBehavior.opaque,
                   onTap: () => _openFullPlayer(0),
                   child: Container(
                     margin: const EdgeInsets.only(bottom: 12),
