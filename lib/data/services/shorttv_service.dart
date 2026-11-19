@@ -383,80 +383,75 @@ class ShortTvService {
     return sectionsMap;
   }
 
-  /// Mengambil katalog drama Beranda untuk 3 tab murni (tanpa sub-filter):
-  /// 1. 'sulih_suara': Gudang penuh drama sulih suara / dubbing Indonesia (ratusan judul)
-  /// 2. 'versi_sub': Drama versi subtitle / audio asli teks Indonesia
-  /// 3. 'global': Tembak gudang campur seluruh drama global dari semua genre
+  /// Mengambil katalog drama Beranda untuk 4 tab murni sesuai protokol server:
+  /// 1. 'untuk_anda': Dari kata kunci pencarian "sulih suara" (+ seksi sulih suara operasional)
+  /// 2. 'terbaru': Dari kata kunci pencarian "dubbing"
+  /// 3. 'terpanas': Dari kata kunci pencarian "versi dub"
+  /// 4. 'peringkat': Global all gudang konten (murni server operasional, bukan tembak pencarian)
   Future<List<DramaModel>> getBerandaDramas({
     required String tab,
     bool forceRefresh = false,
   }) async {
-    final sections = await fetchOperatingSections(
-      tabId: 13,
-      forceRefresh: forceRefresh,
-    );
-
     final seen = <String>{};
     final list = <DramaModel>[];
 
-    if (tab == 'sulih_suara') {
-      // 1. Seksi prioritas Sulih Suara & Lokal
-      final dub = sections['🎧Drama Dubbing'] ?? [];
-      final lokal = sections['🇮🇩Lokal Short TV '] ?? [];
-      for (final d in [...dub, ...lokal]) {
+    if (tab == 'untuk_anda') {
+      // 1. Seksi prioritas operasional tab 13 (Sulih Suara)
+      final sections = await fetchOperatingSections(
+        tabId: 13,
+        forceRefresh: forceRefresh,
+      );
+      final dubSec = sections['🎧Drama Dubbing'] ?? [];
+      final lokalSec = sections['🇮🇩Lokal Short TV '] ?? [];
+      for (final d in [...dubSec, ...lokalSec]) {
         if (seen.add(d.id)) list.add(d);
       }
 
-      // 2. Tambah dari semua seksi lain yang berjudul/berdeskripsi Sulih Suara / Dubbing
-      for (final dramaList in sections.values) {
-        for (final d in dramaList) {
-          final t = d.title.toLowerCase();
-          final desc = d.description.toLowerCase();
-          if (t.contains('sulih suara') ||
-              t.contains('dubbing') ||
-              desc.contains('sulih suara') ||
-              desc.contains('dubbing')) {
-            if (seen.add(d.id)) list.add(d);
-          }
-        }
-      }
-
-      // 3. Tarik pencarian keyword 'Sulih Suara' dan 'Dubbing' untuk memperkaya hingga ratusan judul
+      // 2. Tembak pencarian kata kunci "sulih suara" (halaman 1 & 2)
       try {
-        final dub1 = await searchShortTv('Sulih Suara', perPage: 20);
-        for (final d in dub1) {
+        final res1 = await searchShortTv('sulih suara', page: 1, perPage: 20);
+        for (final d in res1) {
           if (seen.add(d.id)) list.add(d);
         }
-        final dub2 = await searchShortTv('Dubbing', perPage: 20);
-        for (final d in dub2) {
+        final res2 = await searchShortTv('sulih suara', page: 2, perPage: 20);
+        for (final d in res2) {
           if (seen.add(d.id)) list.add(d);
         }
       } catch (_) {}
 
-      // Jika masih sedikit, sertakan seksi trending
-      if (list.length < 20) {
-        final trending = sections['🔥Sedang Trending'] ?? [];
-        for (final d in trending) {
+      return list;
+    } else if (tab == 'terbaru') {
+      // Tembak pencarian kata kunci "dubbing" (halaman 1 & 2)
+      try {
+        final res1 = await searchShortTv('dubbing', page: 1, perPage: 20);
+        for (final d in res1) {
           if (seen.add(d.id)) list.add(d);
         }
-      }
+        final res2 = await searchShortTv('dubbing', page: 2, perPage: 20);
+        for (final d in res2) {
+          if (seen.add(d.id)) list.add(d);
+        }
+      } catch (_) {}
       return list;
-    } else if (tab == 'versi_sub') {
-      // Drama versi subtitle (teks Indonesia / audio asli)
-      for (final entry in sections.entries) {
-        if (entry.key.contains('Dubbing') || entry.key.contains('Lokal')) {
-          continue;
+    } else if (tab == 'terpanas') {
+      // Tembak pencarian kata kunci "versi dub" (halaman 1 & 2)
+      try {
+        final res1 = await searchShortTv('versi dub', page: 1, perPage: 20);
+        for (final d in res1) {
+          if (seen.add(d.id)) list.add(d);
         }
-        for (final d in entry.value) {
-          final t = d.title.toLowerCase();
-          if (!t.contains('sulih suara') && !t.contains('dubbing')) {
-            if (seen.add(d.id)) list.add(d);
-          }
+        final res2 = await searchShortTv('versi dub', page: 2, perPage: 20);
+        for (final d in res2) {
+          if (seen.add(d.id)) list.add(d);
         }
-      }
+      } catch (_) {}
       return list;
     } else {
-      // 'global': Tembak gudang campur seluruh drama dari semua seksi operasional tanpa filter
+      // 'peringkat': Global all gudang konten (murni server operasional, bukan tembak pencarian)
+      final sections = await fetchOperatingSections(
+        tabId: 13,
+        forceRefresh: forceRefresh,
+      );
       for (final dramaList in sections.values) {
         for (final d in dramaList) {
           if (seen.add(d.id)) list.add(d);

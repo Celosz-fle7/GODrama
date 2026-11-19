@@ -18,15 +18,20 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  String _selectedCategoryId = 'sulih_suara';
+  String _selectedCategoryId = 'untuk_anda';
   List<DramaModel> _dramas = [];
   bool _isLoading = true;
 
-  // 3 Tab Utama Beranda Murni: Sulih Suara, Versi Sub, dan Gudang Global
+  // 4 Tab Beranda Sesuai Protokol:
+  // 1. Untuk Anda 🇮🇩: Pencarian keyword "sulih suara"
+  // 2. Terbaru ✨: Pencarian keyword "dubbing"
+  // 3. Terpanas 🔥: Pencarian keyword "versi dub"
+  // 4. Peringkat 👑: Global all gudang konten (murni server operasional)
   final List<CategoryModel> _categories = const [
-    CategoryModel(id: 'sulih_suara', name: 'Sulih Suara 🇮🇩'),
-    CategoryModel(id: 'versi_sub', name: 'Versi Sub 📝'),
-    CategoryModel(id: 'global', name: 'Global 🌐'),
+    CategoryModel(id: 'untuk_anda', name: 'Untuk Anda 🇮🇩'),
+    CategoryModel(id: 'terbaru', name: 'Terbaru ✨'),
+    CategoryModel(id: 'terpanas', name: 'Terpanas 🔥'),
+    CategoryModel(id: 'peringkat', name: 'Peringkat 👑'),
   ];
 
   @override

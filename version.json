@@ -1,8 +1,8 @@
 {
-  "version_code": 8,
-  "version_name": "1.0.7",
+  "version_code": 9,
+  "version_name": "1.0.8",
   "is_force_update": false,
-  "title": "Pembaruan GoDrama v1.0.7!",
-  "changelog": "- Tab Beranda Bersih & Tuntas: 3 tab murni tanpa sub-filter membingungkan: 'Sulih Suara 🇮🇩' (ratusan drama dubbing Indonesia), 'Versi Sub 📝' (teks Indonesia/audio asli), dan 'Global 🌐' (gudang campur seluruh drama global)\n- Tab For You Bersih & Murni: Seluruh bar filter atas dihapus, tampilan reel vertikal 100% mulus dan imersif\n- Tombol Tonton Semua Episode: Interaksi tombol episode lebih responsif dan langsung membuka pemutar penuh",
-  "download_url": "https://github.com/Celosz-fle7/GODrama/releases/download/v1.0.7/GoDrama-v1.0.7-release.apk"
+  "title": "Pembaruan GoDrama v1.0.8!",
+  "changelog": "- Tab Untuk Anda: Ditenagai kata kunci pencarian murni 'sulih suara' langsung dari database server\n- Tab Terbaru: Ditenagai kata kunci pencarian murni 'dubbing'\n- Tab Terpanas: Ditenagai kata kunci pencarian murni 'versi dub'\n- Tab Peringkat: Global All Gudang Konten murni seksi operasional server (bukan dari pencarian)\n- Tab For You: Reel video layar penuh bersih tanpa gangguan",
+  "download_url": "https://github.com/Celosz-fle7/GODrama/releases/download/v1.0.8/GoDrama-v1.0.8-release.apk"
 }
