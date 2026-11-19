@@ -1,8 +1,8 @@
 {
-  "version_code": 11,
-  "version_name": "1.0.10",
+  "version_code": 12,
+  "version_name": "1.0.11",
   "is_force_update": false,
-  "title": "Pembaruan GoDrama v1.0.10!",
+  "title": "Pembaruan GoDrama v1.0.11!",
   "changelog": "- Perbaikan Kritis Kueri Pencarian POST: Menetapkan contentLength eksplisit pada payload HTTP Dart agar signature HMAC-MD5 gateway Istio-Envoy 100% valid dan semua tab pencarian terisi penuh\n- 4 Tab Beranda: Untuk Anda (sulih suara), Terbaru (dubbing), Terpanas (versi dub), Peringkat (Global All Gudang Konten)\n- Tab For You: Mix rotasi berselang-seling dari sulih suara dan dubbing",
-  "download_url": "https://github.com/Celosz-fle7/GODrama/releases/download/v1.0.10/GoDrama-v1.0.10-release.apk"
+  "download_url": "https://github.com/Celosz-fle7/GODrama/releases/download/v1.0.11/GoDrama-v1.0.11-release.apk"
 }
