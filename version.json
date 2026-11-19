@@ -1,8 +1,8 @@
 {
-  "changelog": "- Perbaikan cek update: versi aplikasi kini dibaca dari paket terpasang, dialog update tidak lagi muncul selamanya\n- Riwayat, favorit, dan pengaturan kini tersimpan dan tidak hilang saat aplikasi ditutup; lanjutkan tontonan dari episode dan posisi terakhir\n- Favorit kini menampilkan drama yang benar-benar disimpan\n- Player dan feed kini menampilkan pesan error dengan tombol coba lagi saat video gagal dimuat\n- Data yang tidak disediakan server tidak lagi diisi angka acak",
-  "download_url": "https://github.com/Celosz-fle7/GODrama/releases/download/v1.0.14/GoDrama-v1.0.14-release.apk",
+  "changelog": "- Feed For You dan Home kini dimuat per halaman dan lebih cepat; episode berikutnya dimuat lebih dulu agar swipe makin mulus\n- Ganti kualitas video kini tanpa henti — video tetap jalan saat resolusi diganti\n- Profil dirapikan: lebih simpel, tanpa klaim VIP palsu\n- Aplikasi lebih ringan: aset dan kode tidak terpakai dibuang, ukuran unduhan mengecil\n- Perbaikan keamanan koneksi dan stabilitas pemutaran",
+  "download_url": "https://github.com/Celosz-fle7/GODrama/releases/download/v1.0.15/GoDrama-v1.0.15-release.apk",
   "is_force_update": false,
-  "title": "Pembaruan GoDrama v1.0.14!",
-  "version_code": 15,
-  "version_name": "1.0.14"
+  "title": "Pembaruan GoDrama v1.0.15!",
+  "version_code": 16,
+  "version_name": "1.0.15"
 }
