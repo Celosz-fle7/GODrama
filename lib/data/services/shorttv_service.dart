@@ -243,57 +243,67 @@ class ShortTvService {
     return null;
   }
 
-  /// Ambil Tangga Algoritma Resmi ShortTV untuk audiens Indonesia:
-  /// Urutan mutlak server: Sedang Trending -> Sulih Suara Indonesia (Hot) -> Terbaru.
+  /// Algoritma Tab For You: Mix Rotasi bergantian dari Sulih Suara & Dubbing
   Future<List<DramaModel>> fetchForYouAlgorithm() async {
     final list = <DramaModel>[];
     final seen = <String>{};
 
-    // 1. Ambil tangga operasional Tab 13 (Sedang Trending & Sulih Suara terhangat hari ini)
+    final sulihSuaraPool = <DramaModel>[];
+    final dubbingPool = <DramaModel>[];
+
+    // 1. Ambil seksi operasional Tab 13
     try {
-      final tabResp = await _request(
-        'GET',
-        '/wefeed-mobile-bff/tab-operating?tabId=13',
-      );
-      if (tabResp != null &&
-          tabResp['code'] == 0 &&
-          tabResp['data'] is Map<String, dynamic>) {
-        final sections = tabResp['data']['items'] as List?;
-        if (sections != null) {
-          for (final sec in sections) {
-            if (sec is! Map<String, dynamic>) continue;
-            final subjects = sec['subjects'] ?? sec['items'];
-            if (subjects is List) {
-              for (final sub in subjects) {
-                if (sub is Map<String, dynamic>) {
-                  final model = _mapToDramaModel(sub);
-                  if (model.id.isNotEmpty && seen.add(model.id)) {
-                    list.add(model);
-                  }
-                }
-              }
-            }
-          }
-        }
+      final sections =
+          await fetchOperatingSections(tabId: 13, forceRefresh: true);
+      final dubSec = sections['🎧Drama Dubbing'] ?? [];
+      final lokalSec = sections['🇮🇩Lokal Short TV '] ?? [];
+      for (final d in lokalSec) {
+        if (seen.add(d.id)) sulihSuaraPool.add(d);
+      }
+      for (final d in dubSec) {
+        if (seen.add(d.id)) dubbingPool.add(d);
       }
     } catch (_) {}
 
-    // 2. Ambil katalog kurasi Sulih Suara Indonesia (Hot)
+    // 2. Tarik kueri pencarian kata kunci "sulih suara" (halaman 1 & 2)
     try {
-      final indoDramas = await fetchShortTvDramas(
-        page: 1,
-        perPage: 20,
-        classify: 'Sulih suara Indonesia',
-        sort: 'Hot',
-      );
-      for (final d in indoDramas) {
-        if (seen.add(d.id)) {
-          list.add(d);
-        }
+      final res1 = await searchShortTv('sulih suara', page: 1, perPage: 20);
+      for (final d in res1) {
+        if (seen.add(d.id)) sulihSuaraPool.add(d);
+      }
+      final res2 = await searchShortTv('sulih suara', page: 2, perPage: 20);
+      for (final d in res2) {
+        if (seen.add(d.id)) sulihSuaraPool.add(d);
       }
     } catch (_) {}
 
-    // 3. Fallback jika kosong: ambil ShortTV general
+    // 3. Tarik kueri pencarian kata kunci "dubbing" (halaman 1 & 2)
+    try {
+      final res1 = await searchShortTv('dubbing', page: 1, perPage: 20);
+      for (final d in res1) {
+        if (seen.add(d.id)) dubbingPool.add(d);
+      }
+      final res2 = await searchShortTv('dubbing', page: 2, perPage: 20);
+      for (final d in res2) {
+        if (seen.add(d.id)) dubbingPool.add(d);
+      }
+    } catch (_) {}
+
+    // 4. Mix Rotasi: Interleave 1 Sulih Suara, 1 Dubbing secara berselang-seling
+    final maxLen = sulihSuaraPool.length > dubbingPool.length
+        ? sulihSuaraPool.length
+        : dubbingPool.length;
+
+    for (int i = 0; i < maxLen; i++) {
+      if (i < sulihSuaraPool.length) {
+        list.add(sulihSuaraPool[i]);
+      }
+      if (i < dubbingPool.length) {
+        list.add(dubbingPool[i]);
+      }
+    }
+
+    // Fallback jika kosong
     if (list.isEmpty) {
       list.addAll(await fetchShortTvDramas(page: 1, perPage: 20));
     }
