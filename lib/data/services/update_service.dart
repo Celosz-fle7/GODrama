@@ -72,7 +72,8 @@ class UpdateService {
       final info = await PackageInfo.fromPlatform();
       _currentVersionCode = int.tryParse(info.buildNumber) ?? 0;
       _currentVersionName = info.version;
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[UpdateService] Gagal baca versi terpasang: $e');
       _currentVersionCode = 0;
       _currentVersionName = '';
     }
