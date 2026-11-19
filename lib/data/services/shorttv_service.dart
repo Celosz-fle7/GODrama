@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -25,12 +26,28 @@ class ShortTvService {
   String _deviceId = '';
   String? _token;
   bool _isHandshaking = false;
+  Completer<void>? _handshakeCompleter;
 
   void _ensureDeviceId() {
     if (_deviceId.isEmpty) {
       final rand = Random.secure();
       final bytes = List<int>.generate(16, (_) => rand.nextInt(256));
       _deviceId = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+    }
+  }
+
+  Future<void> _ensureToken() async {
+    if (_token != null && _token!.isNotEmpty) return;
+    if (_handshakeCompleter != null) {
+      await _handshakeCompleter!.future;
+      return;
+    }
+    _handshakeCompleter = Completer<void>();
+    try {
+      await _handshake();
+    } finally {
+      _handshakeCompleter?.complete();
+      _handshakeCompleter = null;
     }
   }
 
@@ -159,10 +176,9 @@ class ShortTvService {
     String method,
     String pathWithQuery, {
     Map<String, dynamic>? bodyJson,
+    bool isRetry = false,
   }) async {
-    if (_token == null && !_isHandshaking) {
-      await _handshake();
-    }
+    await _ensureToken();
 
     final ts = DateTime.now().millisecondsSinceEpoch.toString();
     final bodyStr = bodyJson != null ? jsonEncode(bodyJson) : '';
@@ -241,9 +257,16 @@ class ShortTvService {
         final errBody = await response.transform(utf8.decoder).join();
         debugPrint(
             '[ShortTvService] HTTP ${response.statusCode} for $pathWithQuery: $errBody');
-        if (response.statusCode == 401) {
+        if ((response.statusCode == 401 || response.statusCode == 441) &&
+            !isRetry) {
           _token = null;
-          await _handshake();
+          await _ensureToken();
+          return await _request(
+            method,
+            pathWithQuery,
+            bodyJson: bodyJson,
+            isRetry: true,
+          );
         }
       }
     } catch (_) {}
@@ -273,26 +296,36 @@ class ShortTvService {
       }
     } catch (_) {}
 
-    // 2. Tarik kueri pencarian kata kunci "sulih suara" (halaman 1 & 2)
+    // 2. Tarik kueri pencarian kata kunci "sulih suara" (halaman 1 s/d 3) & "sulih"
+    for (int p = 1; p <= 3; p++) {
+      try {
+        final res = await searchShortTv('sulih suara', page: p, perPage: 20);
+        if (res.isEmpty) break;
+        for (final d in res) {
+          if (seen.add(d.id)) sulihSuaraPool.add(d);
+        }
+      } catch (_) {}
+    }
     try {
-      final res1 = await searchShortTv('sulih suara', page: 1, perPage: 20);
-      for (final d in res1) {
-        if (seen.add(d.id)) sulihSuaraPool.add(d);
-      }
-      final res2 = await searchShortTv('sulih suara', page: 2, perPage: 20);
-      for (final d in res2) {
+      final res = await searchShortTv('sulih', page: 1, perPage: 20);
+      for (final d in res) {
         if (seen.add(d.id)) sulihSuaraPool.add(d);
       }
     } catch (_) {}
 
-    // 3. Tarik kueri pencarian kata kunci "dubbing" (halaman 1 & 2)
+    // 3. Tarik kueri pencarian kata kunci "dubbing" (halaman 1 s/d 3) & "dub"
+    for (int p = 1; p <= 3; p++) {
+      try {
+        final res = await searchShortTv('dubbing', page: p, perPage: 20);
+        if (res.isEmpty) break;
+        for (final d in res) {
+          if (seen.add(d.id)) dubbingPool.add(d);
+        }
+      } catch (_) {}
+    }
     try {
-      final res1 = await searchShortTv('dubbing', page: 1, perPage: 20);
-      for (final d in res1) {
-        if (seen.add(d.id)) dubbingPool.add(d);
-      }
-      final res2 = await searchShortTv('dubbing', page: 2, perPage: 20);
-      for (final d in res2) {
+      final res = await searchShortTv('dub', page: 1, perPage: 20);
+      for (final d in res) {
         if (seen.add(d.id)) dubbingPool.add(d);
       }
     } catch (_) {}
@@ -414,55 +447,90 @@ class ShortTvService {
     final list = <DramaModel>[];
 
     if (tab == 'untuk_anda') {
-      // 1. Seksi prioritas operasional tab 13 (Sulih Suara)
-      final sections = await fetchOperatingSections(
-        tabId: 13,
-        forceRefresh: forceRefresh,
-      );
-      final dubSec = sections['🎧Drama Dubbing'] ?? [];
-      final lokalSec = sections['🇮🇩Lokal Short TV '] ?? [];
-      for (final d in [...dubSec, ...lokalSec]) {
-        if (seen.add(d.id)) list.add(d);
-      }
-
-      // 2. Tembak pencarian kata kunci "sulih suara" (halaman 1 & 2)
+      // 1. Seksi prioritas operasional tab 13 & tab 29
       try {
-        final res1 = await searchShortTv('sulih suara', page: 1, perPage: 20);
-        for (final d in res1) {
+        final sections = await fetchOperatingSections(
+          tabId: 13,
+          forceRefresh: forceRefresh,
+        );
+        final dubSec = sections['🎧Drama Dubbing'] ?? [];
+        final lokalSec = sections['🇮🇩Lokal Short TV '] ?? [];
+        for (final d in [...dubSec, ...lokalSec]) {
           if (seen.add(d.id)) list.add(d);
         }
-        final res2 = await searchShortTv('sulih suara', page: 2, perPage: 20);
-        for (final d in res2) {
+      } catch (_) {}
+
+      // 2. Tembak pencarian kata kunci "sulih suara" (halaman 1 s/d 3) & "sulih"
+      for (int p = 1; p <= 3; p++) {
+        try {
+          final res = await searchShortTv('sulih suara', page: p, perPage: 20);
+          if (res.isEmpty) break;
+          for (final d in res) {
+            if (seen.add(d.id)) list.add(d);
+          }
+        } catch (_) {}
+      }
+      try {
+        final res = await searchShortTv('sulih', page: 1, perPage: 20);
+        for (final d in res) {
           if (seen.add(d.id)) list.add(d);
         }
       } catch (_) {}
 
       return list;
     } else if (tab == 'terbaru') {
-      // Tembak pencarian kata kunci "dubbing" (halaman 1 & 2)
+      // 1. Seksi operasional tab 13
       try {
-        final res1 = await searchShortTv('dubbing', page: 1, perPage: 20);
-        for (final d in res1) {
+        final sections = await fetchOperatingSections(
+          tabId: 13,
+          forceRefresh: forceRefresh,
+        );
+        final latestSec = sections['🎉Terbaru'] ?? [];
+        for (final d in latestSec) {
           if (seen.add(d.id)) list.add(d);
         }
-        final res2 = await searchShortTv('dubbing', page: 2, perPage: 20);
-        for (final d in res2) {
+      } catch (_) {}
+
+      // 2. Tembak pencarian kata kunci "dubbing" (halaman 1 s/d 3) & "dub"
+      for (int p = 1; p <= 3; p++) {
+        try {
+          final res = await searchShortTv('dubbing', page: p, perPage: 20);
+          if (res.isEmpty) break;
+          for (final d in res) {
+            if (seen.add(d.id)) list.add(d);
+          }
+        } catch (_) {}
+      }
+      try {
+        final res = await searchShortTv('dub', page: 1, perPage: 20);
+        for (final d in res) {
           if (seen.add(d.id)) list.add(d);
         }
       } catch (_) {}
       return list;
     } else if (tab == 'terpanas') {
-      // Tembak pencarian kata kunci "versi dub" (halaman 1 & 2)
+      // 1. Seksi operasional tab 13
       try {
-        final res1 = await searchShortTv('versi dub', page: 1, perPage: 20);
-        for (final d in res1) {
-          if (seen.add(d.id)) list.add(d);
-        }
-        final res2 = await searchShortTv('versi dub', page: 2, perPage: 20);
-        for (final d in res2) {
+        final sections = await fetchOperatingSections(
+          tabId: 13,
+          forceRefresh: forceRefresh,
+        );
+        final hotSec = sections['🔥Sedang Trending'] ?? [];
+        for (final d in hotSec) {
           if (seen.add(d.id)) list.add(d);
         }
       } catch (_) {}
+
+      // 2. Tembak pencarian kata kunci "versi dub" (halaman 1 s/d 3)
+      for (int p = 1; p <= 3; p++) {
+        try {
+          final res = await searchShortTv('versi dub', page: p, perPage: 20);
+          if (res.isEmpty) break;
+          for (final d in res) {
+            if (seen.add(d.id)) list.add(d);
+          }
+        } catch (_) {}
+      }
       return list;
     } else {
       // 'peringkat': Global all gudang konten (murni server operasional, bukan tembak pencarian)

@@ -36,6 +36,14 @@ class _ForYouScreenState extends State<ForYouScreen> {
     _loadLiveShortDramas();
   }
 
+  @override
+  void didUpdateWidget(covariant ForYouScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive != oldWidget.isActive) {
+      setState(() {});
+    }
+  }
+
   Future<void> _loadLiveShortDramas() async {
     final live = await ShortTvService.instance.fetchForYouAlgorithm();
     if (mounted) {
@@ -116,7 +124,11 @@ class _ForYouScreenState extends State<ForYouScreen> {
         itemBuilder: (context, index) {
           final drama = _dramas[index];
           final isCurrent = widget.isActive && (index == _activeDramaIndex);
-          return _ReelItem(drama: drama, isActive: isCurrent);
+          return _ReelItem(
+            key: ValueKey('${drama.id}_${widget.isActive}'),
+            drama: drama,
+            isActive: isCurrent,
+          );
         },
       ),
     );
@@ -308,7 +320,7 @@ class _ReelItemState extends State<_ReelItem> {
   }
 
   Future<void> _openFullPlayer([int startEpIndex = 0]) async {
-    _videoController?.pause();
+    _disposeVideo();
     setState(() => _isPlaying = false);
 
     await Navigator.push(
@@ -327,8 +339,7 @@ class _ReelItemState extends State<_ReelItem> {
     );
 
     if (mounted && widget.isActive) {
-      _videoController?.play();
-      setState(() => _isPlaying = true);
+      _initTeaserVideo();
     }
   }
 
