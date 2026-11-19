@@ -342,15 +342,37 @@ class ShortTvService {
   }
 
   /// Ambil daftar episode dan stream URL langsung dari ShortTV API:
-  /// /wefeed-mobile-bff/shorts/mini-list?endPosition=100&pagerMode=1&startPosition=0&subjectId={id}
+  /// Menggunakan batch chunking (10 item/chunk) karena gateway membatasi rentang request <= 15 (PARAMS_ERROR: exceed limit)
   Future<List<EpisodeModel>> fetchShortTvEpisodes(
     String subjectId, {
     int startPos = 0,
-    int endPosition = 100,
+    int endPosition = 20,
   }) async {
-    final safeEnd = endPosition < startPos ? startPos + 50 : endPosition;
+    final chunks = <Future<List<EpisodeModel>>>[];
+    int cur = startPos;
+    final limit = endPosition < startPos ? startPos + 10 : endPosition;
+    while (cur < limit) {
+      final chunkStart = cur;
+      final chunkEnd = (cur + 10 <= limit) ? cur + 10 : limit;
+      chunks.add(_fetchSingleChunk(subjectId, chunkStart, chunkEnd));
+      cur = chunkEnd + 1;
+    }
+
+    final results = await Future.wait(chunks);
+    final all = <EpisodeModel>[];
+    for (final r in results) {
+      all.addAll(r);
+    }
+    return all;
+  }
+
+  Future<List<EpisodeModel>> _fetchSingleChunk(
+    String subjectId,
+    int startPos,
+    int endPosition,
+  ) async {
     final path =
-        '/wefeed-mobile-bff/shorts/mini-list?endPosition=$safeEnd&pagerMode=1&startPosition=$startPos&subjectId=$subjectId';
+        '/wefeed-mobile-bff/shorts/mini-list?endPosition=$endPosition&pagerMode=1&startPosition=$startPos&subjectId=$subjectId';
 
     final resp = await _request('GET', path);
     if (resp != null &&
@@ -433,6 +455,17 @@ class ShortTvService {
     return [];
   }
 
+  String _extractImageUrl(dynamic imgObj) {
+    if (imgObj == null) return '';
+    if (imgObj is String) return imgObj;
+    if (imgObj is Map) {
+      if (imgObj['url'] != null) return imgObj['url'].toString();
+      if (imgObj['uri'] != null) return imgObj['uri'].toString();
+      if (imgObj['cover'] != null) return _extractImageUrl(imgObj['cover']);
+    }
+    return '';
+  }
+
   DramaModel _mapToDramaModel(Map<String, dynamic> json) {
     final subjectId =
         json['subjectId']?.toString() ??
@@ -444,8 +477,10 @@ class ShortTvService {
         json['description']?.toString() ??
         json['brief']?.toString() ??
         'Drama pendek populer ber-subtitle dan bersulih suara Indonesia.';
-    final cover = json['cover']?.toString() ?? '';
-    final banner = json['banner']?.toString() ?? cover;
+    final cover = _extractImageUrl(json['cover']);
+    final banner = _extractImageUrl(json['banner']).isNotEmpty
+        ? _extractImageUrl(json['banner'])
+        : cover;
     final totalEpisodes =
         (json['totalEpisodes'] as num?)?.toInt() ??
         (json['episodesCount'] as num?)?.toInt() ??
