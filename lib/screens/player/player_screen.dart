@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../core/constants/app_colors.dart';
-import '../../core/player/smart_stream_proxy.dart';
 import '../../data/models/drama_model.dart';
 import '../../data/services/shorttv_service.dart';
 import '../../data/services/app_settings_service.dart';
@@ -35,6 +34,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
   // Error state: gagal load daftar episode / gagal init video.
   bool _episodesFailed = false;
   String? _videoError;
+  // Fetch sisa episode di latar belakang (setelah chunk pertama main).
+  // Future yang sama dipakai bersama: tombol Next yang ditekan saat fetch
+  // berjalan ikut menunggu hasilnya, bukan fetch kedua.
+  Future<void>? _remainingFuture;
+  bool _remainingExhausted = false;
+  // Token pergantian kualitas: hanya switch terbaru yang boleh menukar
+  // controller (ketukan ganda cepat tidak menimpa satu sama lain).
+  int _qualitySwitchToken = 0;
 
   // Scrubber state
   bool _isDraggingScrubber = false;
@@ -104,13 +111,20 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
     if (_episodes.isEmpty && !_isLoadingEpisodes) {
       _isLoadingEpisodes = true;
+      // Lazy: chunk pertama saja (10 episode) sebelum frame pertama.
+      // Kecuali resume di episode jauh — ambil sampai episode itu.
       final targetEps = widget.drama.totalEpisodes > 0
           ? widget.drama.totalEpisodes
           : 100;
+      var firstEnd = 10;
+      if (_currentEpisodeIndex >= firstEnd) {
+        firstEnd = _currentEpisodeIndex + 1;
+      }
+      if (firstEnd > targetEps) firstEnd = targetEps;
       final liveEps = await ShortTvService.instance.fetchShortTvEpisodes(
         widget.drama.id,
         startPos: 1,
-        endPosition: targetEps,
+        endPosition: firstEnd,
       );
       _isLoadingEpisodes = false;
       if (!mounted) return;
@@ -138,12 +152,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
         ep.resolutions.isNotEmpty) {
       _selectedQuality = ep.resolutions.keys.first;
     }
-    final rawStreamUrl = ep.getUrlForQuality(_selectedQuality);
-    final proxiedUrl = SmartStreamProxy.instance.getProxyUrl(rawStreamUrl);
+    final streamUrl = ep.getUrlForQuality(_selectedQuality);
 
     _positionTimer?.cancel();
     _controller?.dispose();
-    _controller = VideoPlayerController.networkUrl(Uri.parse(proxiedUrl))
+    _controller = VideoPlayerController.networkUrl(Uri.parse(streamUrl))
       ..initialize()
           .then((_) {
             if (mounted) {
@@ -188,11 +201,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
               // posisi tersimpan (seek masih berjalan, posisi terbaca 0).
               if (!shouldResume) _saveProgress();
 
-              // Preload episode berikutnya di latar belakang
-              if (_currentEpisodeIndex + 1 < _episodes.length) {
-                final nextEp = _episodes[_currentEpisodeIndex + 1];
-                SmartStreamProxy.instance.preloadNextEpisode(nextEp.videoUrl);
-              }
+              // Video sudah main: ambil sisa episode di latar belakang
+              // (drawer + tombol next jadi lengkap tanpa menunda playback).
+              _loadRemainingEpisodes();
             }
           })
           .catchError((err) {
@@ -206,62 +217,104 @@ class _PlayerScreenState extends State<PlayerScreen> {
           });
   }
 
+  /// Ambil episode di luar chunk pertama, di latar belakang setelah video
+  /// mulai main. Tidak memblokir playback; drawer terisi bertahap.
+  /// Bila fetch sudah berjalan, pemanggil ikut menunggu Future yang sama.
+  Future<void> _loadRemainingEpisodes() {
+    if (_remainingExhausted) return Future.value();
+    final targetEps = widget.drama.totalEpisodes > 0
+        ? widget.drama.totalEpisodes
+        : 100;
+    if (_episodes.length >= targetEps) return Future.value();
+    _remainingFuture ??= _fetchRemainingEpisodes(targetEps).whenComplete(() {
+      _remainingFuture = null;
+    });
+    return _remainingFuture!;
+  }
+
+  Future<void> _fetchRemainingEpisodes(int targetEps) async {
+    final rest = await ShortTvService.instance.fetchShortTvEpisodes(
+      widget.drama.id,
+      startPos: _episodes.length + 1,
+      endPosition: targetEps,
+    );
+    if (rest.isEmpty) {
+      _remainingExhausted = true;
+      return;
+    }
+    if (!mounted) return;
+    final known = _episodes.map((e) => e.episodeNumber).toSet();
+    final fresh = rest.where((e) => !known.contains(e.episodeNumber)).toList();
+    if (fresh.isEmpty) {
+      _remainingExhausted = true;
+      return;
+    }
+    setState(() {
+      _episodes.addAll(fresh);
+      _episodes.sort((a, b) => a.episodeNumber.compareTo(b.episodeNumber));
+    });
+  }
+
   void _checkVideoEnd() {
     if (_controller != null &&
         _controller!.value.isInitialized &&
         !_controller!.value.isPlaying &&
         _controller!.value.position >= _controller!.value.duration &&
         _controller!.value.duration > Duration.zero) {
-      _playNextEpisode();
+      // Auto-next menghormati pengaturan "Putar Otomatis Episode Berikutnya".
+      // Bila mati, video diam di akhir episode; user menekan Next sendiri.
+      if (AppSettingsService.instance.autoPlayNext) {
+        _playNextEpisode();
+      }
     }
   }
 
-  void _changeQuality(String quality) {
+  /// Ganti kualitas tanpa henti: controller lama tetap memutar selama
+  /// controller baru di-init; begitu siap, posisi disamakan lalu ditukar.
+  /// Listener auto-next dipasang ke controller baru; timer posisi tidak
+  /// disentuh (membaca _controller yang aktif). Gagal init = kualitas
+  /// lama tetap jalan + snackbar, bukan panel error.
+  Future<void> _changeQuality(String quality) async {
     if (_selectedQuality == quality || _controller == null) return;
-    final currentPos = _controller!.value.position;
+    if (_episodes.isEmpty) return;
+    final ep = _episodes[_currentEpisodeIndex.clamp(0, _episodes.length - 1)];
+    final newUrl = ep.getUrlForQuality(quality);
+    final oldController = _controller!;
+    final switchToken = ++_qualitySwitchToken;
+
+    final newController = VideoPlayerController.networkUrl(Uri.parse(newUrl));
+    try {
+      await newController.initialize();
+    } catch (e) {
+      debugPrint('[PlayerScreen] Gagal init kualitas $quality: $e');
+      newController.dispose();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Gagal mengganti kualitas, kualitas lama dipakai'),
+          ),
+        );
+      }
+      return;
+    }
+    if (!mounted || switchToken != _qualitySwitchToken) {
+      newController.dispose();
+      return;
+    }
+
+    final pos = oldController.value.position;
+    await newController.seekTo(pos);
+    newController.setPlaybackSpeed(_playbackSpeed);
+    final wasPlaying = oldController.value.isPlaying;
+    if (wasPlaying) newController.play();
+    newController.addListener(_checkVideoEnd);
     setState(() {
       _selectedQuality = quality;
       _videoError = null;
+      _controller = newController;
     });
-
-    final ep = _episodes[_currentEpisodeIndex.clamp(0, _episodes.length - 1)];
-    final newUrl = ep.getUrlForQuality(quality);
-    final proxiedUrl = SmartStreamProxy.instance.getProxyUrl(newUrl);
-
-    _positionTimer?.cancel();
-    _controller?.dispose();
-    _controller = VideoPlayerController.networkUrl(Uri.parse(proxiedUrl))
-      ..initialize()
-          .then((_) {
-            if (mounted) {
-              _controller?.seekTo(currentPos);
-              _controller?.setPlaybackSpeed(_playbackSpeed);
-              _controller?.play();
-              // Listener auto-next wajib dipasang ulang: controller ini baru.
-              // Tanpa ini, auto-play episode berikutnya mati setelah sekali
-              // ganti kualitas.
-              _controller?.addListener(_checkVideoEnd);
-              setState(() {});
-
-              _positionTimer = Timer.periodic(
-                const Duration(milliseconds: 250),
-                (_) {
-                  if (mounted && !_isDraggingScrubber) {
-                    setState(() {});
-                  }
-                },
-              );
-            }
-          })
-          .catchError((err) {
-            debugPrint('[PlayerScreen] Change quality error: $err');
-            if (mounted) {
-              setState(() {
-                _videoError =
-                    'Video gagal dimuat. Periksa koneksi lalu coba lagi.';
-              });
-            }
-          });
+    oldController.removeListener(_checkVideoEnd);
+    oldController.dispose();
   }
 
   void _changeSpeed(double speed) {
@@ -297,7 +350,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _setupVideo();
   }
 
-  void _playNextEpisode() {
+  Future<void> _playNextEpisode() async {
     if (_currentEpisodeIndex < _episodes.length - 1) {
       _selectEpisode(_currentEpisodeIndex + 1);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -307,15 +360,28 @@ class _PlayerScreenState extends State<PlayerScreen> {
           content: Text('Memutar Episode ${_currentEpisodeIndex + 1}...'),
         ),
       );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          duration: Duration(seconds: 1),
-          backgroundColor: Color(0xFF1E232E),
-          content: Text('Ini adalah episode terakhir.'),
-        ),
-      );
+      return;
     }
+    // Di ujung list yang sudah ter-load: sisa episode mungkin masih
+    // di-fetch di latar belakang. Tunggu dulu sebelum menyatakan habis.
+    final targetEps = widget.drama.totalEpisodes > 0
+        ? widget.drama.totalEpisodes
+        : 100;
+    if (_episodes.length < targetEps && !_remainingExhausted) {
+      await _loadRemainingEpisodes();
+      if (!mounted) return;
+      if (_currentEpisodeIndex < _episodes.length - 1) {
+        _selectEpisode(_currentEpisodeIndex + 1);
+        return;
+      }
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        duration: Duration(seconds: 1),
+        backgroundColor: Color(0xFF1E232E),
+        content: Text('Ini adalah episode terakhir.'),
+      ),
+    );
   }
 
   void _playPreviousEpisode() {
@@ -368,7 +434,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       builder: (context) {
-        final qualities = ['1080p', '720p', '480p'];
+        // Hanya resolusi yang benar-benar punya URL untuk episode ini.
+        final ep = _episodes[_currentEpisodeIndex.clamp(
+          0,
+          _episodes.length - 1,
+        )];
+        final offered = ep.availableQualities;
+        final qualities = offered.isNotEmpty ? offered : [_selectedQuality];
         return SafeArea(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -397,7 +469,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         ? '$q (Full HD)'
                         : q == '720p'
                             ? '$q (HD)'
-                            : '$q (Hemat Kuota)',
+                            : q == '480p'
+                                ? '$q (Hemat Kuota)'
+                                : q,
                     style: TextStyle(
                       fontFamily: 'Urbanist',
                       color: isSel ? AppColors.primary : Colors.white,
