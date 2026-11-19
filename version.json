@@ -1,8 +1,8 @@
 {
-  "changelog": "- Smart Discovery For You: Drama yang sudah ditonton (>=10 eps) disembunyikan otomatis agar feed selalu segar\n- Cooldown 24 Jam untuk drama yang baru dicoba nonton (1-9 eps)\n- Tampilan Reel Cuplikan Bersih: Bebas gangguan, fokus video dan tombol Tonton Sekarang\n- Auto-Next Cuplikan Cerdas: Otomatis lanjut ke drama berikutnya dengan video standby 0ms jeda loading",
-  "download_url": "https://github.com/Celosz-fle7/GODrama/releases/download/v1.0.17/GoDrama-v1.0.17-release.apk",
+  "changelog": "- Perbaikan sistem pembaruan otomatis (in-app update popup & profile update)\n- Keystore rilis permanen untuk pembaruan berkelanjutan tanpa konflik sertifikat\n- Smart Discovery For You: sembunyikan drama yang sudah ditonton\n- Tampilan reel cuplikan bersih dan bebas gangguan",
+  "download_url": "https://github.com/Celosz-fle7/GODrama/releases/download/v1.0.18/GoDrama-v1.0.18-release.apk",
   "is_force_update": false,
-  "title": "Pembaruan GoDrama v1.0.17!",
-  "version_code": 18,
-  "version_name": "1.0.17"
+  "title": "Pembaruan GoDrama v1.0.18!",
+  "version_code": 19,
+  "version_name": "1.0.18"
 }

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -66,16 +68,14 @@ class UpdateService {
   /// versi tidak bisa dibaca — dalam hal itu perbandingan tidak jujur
   /// dilakukan, jadi cek update dibatalkan.
   Future<bool> ensureVersionLoaded() async {
-    if (_versionLoaded) return _currentVersionCode > 0;
-    _versionLoaded = true;
+    if (_currentVersionCode > 0) return true;
     try {
       final info = await PackageInfo.fromPlatform();
       _currentVersionCode = int.tryParse(info.buildNumber) ?? 0;
       _currentVersionName = info.version;
+      _versionLoaded = _currentVersionCode > 0;
     } catch (e) {
       debugPrint('[UpdateService] Gagal baca versi terpasang: $e');
-      _currentVersionCode = 0;
-      _currentVersionName = '';
     }
     return _currentVersionCode > 0;
   }
@@ -114,7 +114,23 @@ class UpdateService {
           data = response.data;
         } else if (response.data is Map) {
           data = Map<String, dynamic>.from(response.data);
+        } else if (response.data is String) {
+          try {
+            final parsed = jsonDecode(response.data as String);
+            if (parsed is Map) {
+              data = Map<String, dynamic>.from(parsed);
+            } else {
+              debugPrint('[UpdateService] Respons bukan JSON Map: $parsed');
+              return;
+            }
+          } catch (e) {
+            debugPrint('[UpdateService] Gagal parse JSON string: $e');
+            return;
+          }
         } else {
+          debugPrint(
+            '[UpdateService] Tipe data tidak dikenali: ${response.data.runtimeType}',
+          );
           return;
         }
 
