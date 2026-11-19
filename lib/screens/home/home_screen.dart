@@ -18,14 +18,19 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  String _selectedCategoryId = 'trending';
+  String _selectedCategoryId = 'untuk_anda';
   List<DramaModel> _dramas = [];
   bool _isLoading = true;
 
   final List<CategoryModel> _categories = const [
-    CategoryModel(id: 'trending', name: 'Sedang Trending 🔥'),
-    CategoryModel(id: 'dubbing', name: 'Sulih Suara ID 🇮🇩'),
+    CategoryModel(id: 'untuk_anda', name: 'Untuk Anda 🇮🇩'),
+    CategoryModel(id: 'terpanas', name: 'Terpanas 🔥'),
     CategoryModel(id: 'terbaru', name: 'Terbaru ✨'),
+    CategoryModel(id: 'rating', name: 'Rating 👑'),
+    CategoryModel(id: 'ceo', name: 'CEO 💕'),
+    CategoryModel(id: 'dubbing', name: 'Sulih Suara 🎧'),
+    CategoryModel(id: 'sejarah', name: 'Sejarah 🏮'),
+    CategoryModel(id: 'barat', name: 'Barat 💖'),
   ];
 
   @override
@@ -34,29 +39,48 @@ class _HomeScreenState extends State<HomeScreen> {
     _loadDramas();
   }
 
-  Future<void> _loadDramas() async {
+  Future<void> _loadDramas({bool forceRefresh = false}) async {
     setState(() => _isLoading = true);
-    List<DramaModel> liveDramas = [];
-    if (_selectedCategoryId == 'dubbing') {
-      liveDramas = await ShortTvService.instance.fetchShortTvDramas(
-        page: 1,
-        perPage: 20,
-        classify: 'Sulih suara Indonesia',
-        sort: 'Hot',
-      );
+    final sections = await ShortTvService.instance.fetchOperatingSections(
+      tabId: 13,
+      forceRefresh: forceRefresh,
+    );
+
+    List<DramaModel> list = [];
+    if (_selectedCategoryId == 'untuk_anda') {
+      // Narik konten untuk tontonan Indonesia: sulih suara & dubbing Indonesia
+      final seen = <String>{};
+      final indoDramas = sections['🇮🇩Lokal Short TV '] ?? [];
+      final dubbingDramas = sections['🎧Drama Dubbing'] ?? [];
+      for (final d in [...indoDramas, ...dubbingDramas]) {
+        if (seen.add(d.id)) list.add(d);
+      }
+      if (list.isEmpty) {
+        list = await ShortTvService.instance.fetchForYouAlgorithm();
+      }
+    } else if (_selectedCategoryId == 'terpanas') {
+      list = sections['🔥Sedang Trending'] ?? sections['Sedang Tren'] ?? [];
     } else if (_selectedCategoryId == 'terbaru') {
-      liveDramas = await ShortTvService.instance.fetchShortTvDramas(
-        page: 1,
-        perPage: 20,
-        sort: 'Latest',
-      );
-    } else {
-      liveDramas = await ShortTvService.instance.fetchForYouAlgorithm();
+      list = sections['🎉Terbaru'] ?? [];
+    } else if (_selectedCategoryId == 'rating') {
+      list = sections['👑Tokoh Legendaris'] ?? [];
+    } else if (_selectedCategoryId == 'ceo') {
+      list = sections['💕CEO'] ?? [];
+    } else if (_selectedCategoryId == 'dubbing') {
+      list = sections['🎧Drama Dubbing'] ?? [];
+    } else if (_selectedCategoryId == 'sejarah') {
+      list = sections['🏮Sejarah'] ?? [];
+    } else if (_selectedCategoryId == 'barat') {
+      list = sections['💖Cerita Barat'] ?? [];
+    }
+
+    if (list.isEmpty) {
+      list = await ShortTvService.instance.fetchForYouAlgorithm();
     }
 
     if (mounted) {
       setState(() {
-        _dramas = liveDramas;
+        _dramas = list;
         _isLoading = false;
       });
     }
@@ -74,7 +98,7 @@ class _HomeScreenState extends State<HomeScreen> {
           color: AppColors.primary,
           backgroundColor: AppColors.surface,
           onRefresh: () async {
-            await _loadDramas();
+            await _loadDramas(forceRefresh: true);
           },
           child: CustomScrollView(
             slivers: [
@@ -217,16 +241,21 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
-              // Section Title: "Must-Watch Dramas"
+              // Section Title
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
-                        'Trending Dramas',
-                        style: TextStyle(
+                      Text(
+                        _categories
+                            .firstWhere(
+                              (c) => c.id == _selectedCategoryId,
+                              orElse: () => _categories.first,
+                            )
+                            .name,
+                        style: const TextStyle(
                           fontFamily: 'Urbanist',
                           fontSize: 18,
                           fontWeight: FontWeight.w800,
@@ -234,7 +263,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                       Text(
-                        'See All',
+                        '${dramas.length} Judul',
                         style: TextStyle(
                           fontFamily: 'Urbanist',
                           fontSize: 13,
@@ -259,14 +288,13 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   delegate: SliverChildBuilderDelegate(
                     (context, index) {
-                      final drama = dramas[index % dramas.length];
+                      final drama = dramas[index];
                       return DramaCard(
                         drama: drama,
                         onTap: () => _openPlayer(drama),
                       );
                     },
-                    childCount:
-                        dramas.length * 2, // repeat for realistic scroll
+                    childCount: dramas.length,
                   ),
                 ),
               ),

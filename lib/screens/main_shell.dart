@@ -28,18 +28,19 @@ class _MainShellState extends State<MainShell> {
     });
   }
 
-  final List<Widget> _pages = const [
-    HomeScreen(),
-    ForYouScreen(),
-    MyListScreen(),
-    ProfileScreen(),
-  ];
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: IndexedStack(index: _currentIndex, children: _pages),
+      body: IndexedStack(
+        index: _currentIndex,
+        children: [
+          const HomeScreen(),
+          ForYouScreen(isActive: _currentIndex == 1),
+          const MyListScreen(),
+          const ProfileScreen(),
+        ],
+      ),
       bottomNavigationBar: Container(
         decoration: const BoxDecoration(
           color: AppColors.surface,

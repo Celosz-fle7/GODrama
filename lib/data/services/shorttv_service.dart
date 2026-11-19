@@ -341,6 +341,48 @@ class ShortTvService {
     return [];
   }
 
+  Map<String, List<DramaModel>>? _cachedSections;
+
+  /// Mengambil seksi operasional tab ShortTV (tabId=13 untuk ShortTV/Sulih Suara Indonesia)
+  Future<Map<String, List<DramaModel>>> fetchOperatingSections({
+    int tabId = 13,
+    bool forceRefresh = false,
+  }) async {
+    if (!forceRefresh && _cachedSections != null && _cachedSections!.isNotEmpty) {
+      return _cachedSections!;
+    }
+
+    final sectionsMap = <String, List<DramaModel>>{};
+    final resp =
+        await _request('GET', '/wefeed-mobile-bff/tab-operating?tabId=$tabId');
+    if (resp != null &&
+        resp['code'] == 0 &&
+        resp['data'] is Map<String, dynamic>) {
+      final items = resp['data']['items'] as List?;
+      if (items != null) {
+        for (final sec in items) {
+          if (sec is! Map<String, dynamic>) continue;
+          final title = sec['title']?.toString().trim() ?? '';
+          final subjects = sec['subjects'] ?? sec['items'];
+          if (subjects is List && subjects.isNotEmpty) {
+            final dramas = subjects
+                .whereType<Map<String, dynamic>>()
+                .map(_mapToDramaModel)
+                .where((d) => d.id.isNotEmpty)
+                .toList();
+            if (dramas.isNotEmpty && title.isNotEmpty) {
+              sectionsMap[title] = dramas;
+            }
+          }
+        }
+      }
+    }
+    if (sectionsMap.isNotEmpty) {
+      _cachedSections = sectionsMap;
+    }
+    return sectionsMap;
+  }
+
   /// Ambil daftar episode dan stream URL langsung dari ShortTV API:
   /// Menggunakan batch chunking (10 item/chunk) karena gateway membatasi rentang request <= 15 (PARAMS_ERROR: exceed limit)
   Future<List<EpisodeModel>> fetchShortTvEpisodes(

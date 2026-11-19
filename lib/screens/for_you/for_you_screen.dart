@@ -16,7 +16,9 @@ import '../../widgets/episode_drawer.dart';
 import '../player/player_screen.dart';
 
 class ForYouScreen extends StatefulWidget {
-  const ForYouScreen({super.key});
+  final bool isActive;
+
+  const ForYouScreen({super.key, this.isActive = true});
 
   @override
   State<ForYouScreen> createState() => _ForYouScreenState();
@@ -113,7 +115,7 @@ class _ForYouScreenState extends State<ForYouScreen> {
         },
         itemBuilder: (context, index) {
           final drama = _dramas[index];
-          final isCurrent = index == _activeDramaIndex;
+          final isCurrent = widget.isActive && (index == _activeDramaIndex);
           return _ReelItem(drama: drama, isActive: isCurrent);
         },
       ),
@@ -305,8 +307,11 @@ class _ReelItemState extends State<_ReelItem> {
     );
   }
 
-  void _openFullPlayer([int startEpIndex = 0]) {
-    Navigator.push(
+  Future<void> _openFullPlayer([int startEpIndex = 0]) async {
+    _videoController?.pause();
+    setState(() => _isPlaying = false);
+
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => PlayerScreen(
@@ -320,6 +325,11 @@ class _ReelItemState extends State<_ReelItem> {
         ),
       ),
     );
+
+    if (mounted && widget.isActive) {
+      _videoController?.play();
+      setState(() => _isPlaying = true);
+    }
   }
 
   @override
