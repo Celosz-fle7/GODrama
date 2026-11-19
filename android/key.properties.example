@@ -1,0 +1,14 @@
+# Template signing rilis — SALIN ke android/key.properties dan isi.
+# File key.properties TIDAK BOLEH di-commit (sudah di .gitignore).
+#
+# 1. Buat keystore sekali (di mesin yang aman, bukan di repo):
+#    keytool -genkeypair -v -keystore godrama-release.keystore \
+#      -alias godrama -keyalg RSA -keysize 2048 -validity 10000
+# 2. Simpan file .keystore di luar repo; isi path absolutnya di bawah.
+# 3. Untuk CI: simpan keystore + password sebagai GitHub Secrets, lalu
+#    buat key.properties di workflow sebelum build (langkah decode base64).
+#
+storePassword=<password-keystore>
+keyPassword=<password-key>
+keyAlias=godrama
+storeFile=/path/ke/godrama-release.keystore

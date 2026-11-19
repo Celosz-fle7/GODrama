@@ -29,6 +29,11 @@ migrate_working_dir/
 .pub/
 /build/
 
+# Android release signing — JANGAN commit keystore / password.
+android/key.properties
+*.keystore
+*.jks
+
 # Android related
 **/android/**/gradle-wrapper.jar
 **/android/.gradle

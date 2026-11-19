@@ -17,7 +17,9 @@ dependencies:
   carousel_slider: ^5.0.0
   lottie: ^3.1.2
   dio: ^5.4.3+1
-  dio_http2_adapter: ^2.0.0
+  # Dipakai langsung oleh Profile (bersihkan + hitung cache gambar).
+  # Sebelumnya hanya transitif lewat cached_network_image.
+  flutter_cache_manager: ^3.4.1
   path_provider: ^2.1.3
   crypto: ^3.0.3
   url_launcher: ^6.3.0
@@ -36,13 +38,22 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
+  # Hanya file yang benar-benar dipakai (lihat AppAssets). Sebelumnya 6
+  # folder dibundel (~14 MB, 225 file) padahal hanya 12 file yang dipakai.
+  # Varian 2.0x/3.0x dari PNG ikut otomatis saat file dasarnya didaftar.
   assets:
-    - assets/images/home/
-    - assets/images/player/
-    - assets/images/profile/
-    - assets/images/my_list/
-    - assets/images/search/
-    - assets/images/common/
+    - assets/images/home/ic_discover_active.png
+    - assets/images/home/ic_discover_inactive.png
+    - assets/images/home/ic_for_you_active.png
+    - assets/images/home/ic_for_you_inactive.png
+    - assets/images/home/ic_my_list_active.png
+    - assets/images/home/ic_my_list_inactive.png
+    - assets/images/home/ic_profile_active.png
+    - assets/images/home/ic_profile_inactive.png
+    - assets/images/home/ic_search.svg
+    - assets/images/player/btn_series_list.svg
+    - assets/images/player/anim_series_playing.json
+    - assets/images/profile/ic_avatar.svg
 
   fonts:
     - family: Urbanist

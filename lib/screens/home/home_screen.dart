@@ -21,6 +21,12 @@ class _HomeScreenState extends State<HomeScreen> {
   String _selectedCategoryId = 'untuk_anda';
   List<DramaModel> _dramas = [];
   bool _isLoading = true;
+  // Pagination: halaman 1 dulu, halaman berikut saat scroll mendekati bawah.
+  final ScrollController _scrollController = ScrollController();
+  final Set<String> _seenIds = {};
+  int _currentPage = 1;
+  bool _hasMore = false;
+  bool _isLoadingMore = false;
 
   // 4 Tab Beranda Sesuai Protokol:
   // 1. Untuk Anda 🇮🇩: Pencarian keyword "sulih suara"
@@ -37,22 +43,78 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
     _loadDramas();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    final nearBottom =
+        _scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 400;
+    if (nearBottom && _hasMore && !_isLoadingMore && !_isLoading) {
+      _loadMore();
+    }
   }
 
   Future<void> _loadDramas({bool forceRefresh = false}) async {
     setState(() => _isLoading = true);
-    final list = await ShortTvService.instance.getBerandaDramas(
+    final list = await ShortTvService.instance.getBerandaDramasPage(
       tab: _selectedCategoryId,
+      page: 1,
       forceRefresh: forceRefresh,
     );
 
     if (mounted) {
+      _seenIds
+        ..clear()
+        ..addAll(list.map((d) => d.id));
       setState(() {
         _dramas = list;
+        _currentPage = 1;
+        _hasMore = _pageHasMore(_selectedCategoryId, 1, list);
         _isLoading = false;
       });
     }
+  }
+
+  Future<void> _loadMore() async {
+    if (_isLoadingMore || !_hasMore) return;
+    setState(() => _isLoadingMore = true);
+    final nextPage = _currentPage + 1;
+    final tab = _selectedCategoryId;
+    final list = await ShortTvService.instance.getBerandaDramasPage(
+      tab: tab,
+      page: nextPage,
+    );
+    if (!mounted) return;
+    // Abaikan bila user sudah pindah tab selama request berjalan.
+    if (tab != _selectedCategoryId) {
+      setState(() => _isLoadingMore = false);
+      return;
+    }
+    final fresh = list.where((d) => _seenIds.add(d.id)).toList();
+    setState(() {
+      _dramas.addAll(fresh);
+      _currentPage = nextPage;
+      _hasMore = _pageHasMore(tab, nextPage, list);
+      _isLoadingMore = false;
+    });
+  }
+
+  // Tab pencarian punya halaman 1-3; peringkat diiris 30/halaman jadi
+  // halaman penuh berarti mungkin masih ada lanjutannya.
+  bool _pageHasMore(String tab, int page, List<DramaModel> results) {
+    if (results.isEmpty) return false;
+    if (tab == 'peringkat') return results.length >= 30;
+    return page < 3;
   }
 
   @override
@@ -70,6 +132,7 @@ class _HomeScreenState extends State<HomeScreen> {
             await _loadDramas(forceRefresh: true);
           },
           child: CustomScrollView(
+            controller: _scrollController,
             slivers: [
               // Top App Bar / Search Bar
               SliverToBoxAdapter(
@@ -307,6 +370,18 @@ class _HomeScreenState extends State<HomeScreen> {
                         );
                       },
                       childCount: dramas.length,
+                    ),
+                  ),
+                ),
+
+              if (_isLoadingMore)
+                const SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(vertical: 20),
+                    child: Center(
+                      child: CircularProgressIndicator(
+                        color: AppColors.primary,
+                      ),
                     ),
                   ),
                 ),

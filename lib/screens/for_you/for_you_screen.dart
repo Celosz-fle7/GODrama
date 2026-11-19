@@ -8,7 +8,6 @@ import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_assets.dart';
-import '../../core/player/smart_stream_proxy.dart';
 import '../../data/models/drama_model.dart';
 import '../../data/services/shorttv_service.dart';
 import '../../data/services/app_settings_service.dart';
@@ -29,6 +28,12 @@ class _ForYouScreenState extends State<ForYouScreen> {
   List<DramaModel> _dramas = [];
   int _activeDramaIndex = 0;
   bool _isLoading = true;
+  // Pagination: halaman 1 dulu (cepat), halaman berikut saat swipe
+  // mendekati akhir feed.
+  final Set<String> _seenIds = {};
+  int _currentPage = 1;
+  bool _hasMore = false;
+  bool _isLoadingMore = false;
 
   @override
   void initState() {
@@ -45,13 +50,34 @@ class _ForYouScreenState extends State<ForYouScreen> {
   }
 
   Future<void> _loadLiveShortDramas() async {
-    final live = await ShortTvService.instance.fetchForYouAlgorithm();
+    final live = await ShortTvService.instance.fetchForYouPage(1);
     if (mounted) {
+      _seenIds
+        ..clear()
+        ..addAll(live.map((d) => d.id));
       setState(() {
         _dramas = live;
+        _currentPage = 1;
+        _hasMore = live.isNotEmpty;
         _isLoading = false;
       });
     }
+  }
+
+  Future<void> _loadMore() async {
+    if (_isLoadingMore || !_hasMore) return;
+    _isLoadingMore = true;
+    final nextPage = _currentPage + 1;
+    final live = await ShortTvService.instance.fetchForYouPage(nextPage);
+    if (!mounted) return;
+    final fresh = live.where((d) => _seenIds.add(d.id)).toList();
+    setState(() {
+      _dramas.addAll(fresh);
+      _currentPage = nextPage;
+      // Feed punya halaman 1-3; halaman kosong = habis.
+      _hasMore = live.isNotEmpty && nextPage < 3;
+      _isLoadingMore = false;
+    });
   }
 
   @override
@@ -120,6 +146,7 @@ class _ForYouScreenState extends State<ForYouScreen> {
           setState(() {
             _activeDramaIndex = index;
           });
+          if (index >= _dramas.length - 3) _loadMore();
         },
         itemBuilder: (context, index) {
           final drama = _dramas[index];
@@ -128,6 +155,7 @@ class _ForYouScreenState extends State<ForYouScreen> {
             key: ValueKey('${drama.id}_${widget.isActive}'),
             drama: drama,
             isActive: isCurrent,
+            isNext: widget.isActive && (index == _activeDramaIndex + 1),
           );
         },
       ),
@@ -138,11 +166,15 @@ class _ForYouScreenState extends State<ForYouScreen> {
 class _ReelItem extends StatefulWidget {
   final DramaModel drama;
   final bool isActive;
+  // Reel berikutnya: videonya di-init lebih awal (preload) tapi tidak
+  // diputar sampai jadi aktif — swipe ke reel berikut jadi instan.
+  final bool isNext;
 
   const _ReelItem({
     super.key,
     required this.drama,
     required this.isActive,
+    this.isNext = false,
   });
 
   @override
@@ -154,6 +186,9 @@ class _ReelItemState extends State<_ReelItem> {
   bool _isPlaying = true;
   List<EpisodeModel> _episodes = [];
   bool _isLoadingEpisodes = false;
+  // Init video sedang berjalan: jangan init ulang (then() yang tertunda
+  // akan memutarnya bila reel sudah aktif).
+  bool _isInitializingVideo = false;
 
   // Menu Pengaturan Cuplikan (diakses via Titik 3)
   String _selectedQuality = '1080p';
@@ -161,6 +196,9 @@ class _ReelItemState extends State<_ReelItem> {
   bool _clearViewMode = false;
   // Gagal load episode / init video cuplikan.
   bool _videoError = false;
+  // Token pergantian kualitas: hanya switch terbaru yang boleh menukar
+  // controller (ketukan ganda cepat tidak menimpa satu sama lain).
+  int _qualitySwitchToken = 0;
 
   // Scrubber State
   bool _isDraggingScrubber = false;
@@ -172,7 +210,7 @@ class _ReelItemState extends State<_ReelItem> {
     super.initState();
     _selectedQuality = AppSettingsService.instance.defaultQuality;
     _episodes = widget.drama.episodes;
-    if (widget.isActive) {
+    if (widget.isActive || widget.isNext) {
       _initTeaserVideo();
     }
   }
@@ -181,19 +219,38 @@ class _ReelItemState extends State<_ReelItem> {
   void didUpdateWidget(covariant _ReelItem oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.isActive && !oldWidget.isActive) {
+      // Jadi aktif: putar controller yang sudah di-preload, atau init baru.
+      if (_videoController != null &&
+          _videoController!.value.isInitialized) {
+        _videoController?.play();
+        _startProgressTracker();
+        setState(() => _isPlaying = true);
+      } else {
+        _initTeaserVideo();
+      }
+    } else if (widget.isNext && !oldWidget.isNext) {
+      // Jadi reel berikut: preload (init saja, tanpa play).
       _initTeaserVideo();
-    } else if (!widget.isActive && oldWidget.isActive) {
+    } else if (!widget.isActive && !widget.isNext && oldWidget.isActive) {
       _disposeVideo();
     }
   }
 
-  /// Memutar cuplikan (Episode 1) secara looping sebagai teaser
+  /// Memutar cuplikan (Episode 1) secara looping sebagai teaser.
+  /// Hanya episode 1 yang di-fetch — daftar episode lengkap tidak
+  /// dibutuhkan untuk cuplikan (player mengambil sendiri saat dibuka).
   Future<void> _initTeaserVideo() async {
+    if (_isInitializingVideo) return;
+    if (_videoController != null &&
+        _videoController!.value.isInitialized) {
+      return;
+    }
     if (mounted) setState(() => _videoError = false);
     if (_episodes.isEmpty && !_isLoadingEpisodes) {
       _isLoadingEpisodes = true;
       final liveEps = await ShortTvService.instance.fetchShortTvEpisodes(
         widget.drama.id,
+        endPosition: 1,
       );
       _isLoadingEpisodes = false;
       if (mounted && liveEps.isNotEmpty) {
@@ -211,25 +268,30 @@ class _ReelItemState extends State<_ReelItem> {
     final teaserEp = _episodes.first;
 
     final streamUrl = teaserEp.getUrlForQuality(_selectedQuality);
-    final proxiedUrl = SmartStreamProxy.instance.getProxyUrl(streamUrl);
 
     _disposeVideo();
+    _isInitializingVideo = true;
 
-    _videoController = VideoPlayerController.networkUrl(Uri.parse(proxiedUrl))
+    _videoController = VideoPlayerController.networkUrl(Uri.parse(streamUrl))
       ..initialize()
           .then((_) {
+            _isInitializingVideo = false;
             if (mounted) {
               _videoController?.setPlaybackSpeed(_playbackSpeed);
               _videoController?.setLooping(true); // Looping cuplikan saja
-              _videoController?.play();
-              setState(() {
-                _isPlaying = true;
-              });
-
-              _startProgressTracker();
+              // Hanya putar bila reel ini aktif; reel preload diam sampai
+              // gilirannya (didUpdateWidget yang memutarnya).
+              if (widget.isActive) {
+                _videoController?.play();
+                setState(() {
+                  _isPlaying = true;
+                });
+                _startProgressTracker();
+              }
             }
           })
           .catchError((err) {
+            _isInitializingVideo = false;
             debugPrint('[ForYouScreen] Video init error: $err');
             if (mounted) setState(() => _videoError = true);
           });
@@ -278,31 +340,52 @@ class _ReelItemState extends State<_ReelItem> {
     });
   }
 
-  void _changeQuality(String quality) {
+  /// Ganti kualitas tanpa henti: controller lama tetap memutar selama
+  /// controller baru di-init; begitu siap, posisi disamakan lalu ditukar.
+  /// Gagal init = kualitas lama tetap jalan + snackbar, bukan layar hitam.
+  Future<void> _changeQuality(String quality) async {
     if (_selectedQuality == quality || _videoController == null) return;
-    final currentPos = _videoController!.value.position;
-    setState(() {
-      _selectedQuality = quality;
-    });
-
     if (_episodes.isEmpty) return;
     final teaserEp = _episodes.first;
     final newUrl = teaserEp.getUrlForQuality(quality);
-    final proxiedUrl = SmartStreamProxy.instance.getProxyUrl(newUrl);
+    final oldController = _videoController!;
+    final switchToken = ++_qualitySwitchToken;
 
-    _videoController?.dispose();
-    _videoController = VideoPlayerController.networkUrl(Uri.parse(proxiedUrl))
-      ..initialize().then((_) {
-        if (mounted) {
-          _videoController?.seekTo(currentPos);
-          _videoController?.setPlaybackSpeed(_playbackSpeed);
-          _videoController?.setLooping(true);
-          _videoController?.play();
-          setState(() {
-            _isPlaying = true;
-          });
-        }
-      });
+    final newController = VideoPlayerController.networkUrl(Uri.parse(newUrl));
+    try {
+      await newController.initialize();
+    } catch (e) {
+      debugPrint('[ForYouScreen] Gagal init kualitas $quality: $e');
+      newController.dispose();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            duration: Duration(seconds: 2),
+            backgroundColor: Color(0xFF1E232E),
+            content: Text('Gagal mengganti kualitas, kualitas lama dipakai'),
+          ),
+        );
+      }
+      return;
+    }
+    if (!mounted || switchToken != _qualitySwitchToken) {
+      newController.dispose();
+      return;
+    }
+
+    final pos = oldController.value.position;
+    await newController.seekTo(pos);
+    newController.setPlaybackSpeed(_playbackSpeed);
+    newController.setLooping(true);
+    final wasPlaying = oldController.value.isPlaying;
+    if (widget.isActive && wasPlaying) newController.play();
+    setState(() {
+      _selectedQuality = quality;
+      _videoController = newController;
+      _isPlaying = widget.isActive && wasPlaying;
+    });
+    oldController.dispose();
+    if (widget.isActive) _startProgressTracker();
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -331,16 +414,14 @@ class _ReelItemState extends State<_ReelItem> {
     _disposeVideo();
     setState(() => _isPlaying = false);
 
+    // Player mengambil daftar episodenya sendiri (lazy: chunk pertama
+    // dulu, sisanya di latar belakang). Reel hanya punya episode 1 untuk
+    // cuplikan — jangan lempar itu sebagai daftar lengkap.
     await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => PlayerScreen(
-          drama: widget.drama.copyWith(
-            episodes: _episodes,
-            totalEpisodes: _episodes.isNotEmpty
-                ? _episodes.length
-                : widget.drama.totalEpisodes,
-          ),
+          drama: widget.drama,
           initialEpisodeIndex: startEpIndex,
         ),
       ),
@@ -351,12 +432,46 @@ class _ReelItemState extends State<_ReelItem> {
     }
   }
 
+  /// Buka drawer episode. Reel hanya memegang episode 1 (cuplikan), jadi
+  /// daftar lengkap di-fetch dulu — dengan dialog loading singkat.
+  Future<void> _showEpisodeDrawer() async {
+    if (_episodes.length <= 1) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(color: AppColors.primary),
+        ),
+      );
+      final full = await ShortTvService.instance.fetchShortTvEpisodes(
+        widget.drama.id,
+      );
+      if (mounted) Navigator.of(context).pop();
+      if (!mounted) return;
+      if (full.isNotEmpty) {
+        setState(() => _episodes = full);
+      }
+    }
+    if (!mounted || _episodes.isEmpty) return;
+    EpisodeDrawer.show(
+      context,
+      drama: widget.drama.copyWith(
+        episodes: _episodes,
+        totalEpisodes: _episodes.length,
+      ),
+      currentEpisodeIndex: 0,
+      onEpisodeSelected: (selectedIdx) {
+        _openFullPlayer(selectedIdx);
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isFav = AppSettingsService.instance.isFavorite(widget.drama.id);
-    final totalEps = _episodes.isNotEmpty
-        ? _episodes.length
-        : widget.drama.totalEpisodes;
+    // Reel hanya memegang episode 1 untuk cuplikan — jumlah episode
+    // diambil dari data drama (server), bukan panjang list cuplikan.
+    final totalEps = widget.drama.totalEpisodes;
 
     return Stack(
       fit: StackFit.expand,
@@ -617,19 +732,7 @@ class _ReelItemState extends State<_ReelItem> {
 
                 // 2. Series / Drawer Episode
                 GestureDetector(
-                  onTap: () {
-                    EpisodeDrawer.show(
-                      context,
-                      drama: widget.drama.copyWith(
-                        episodes: _episodes,
-                        totalEpisodes: totalEps,
-                      ),
-                      currentEpisodeIndex: 0,
-                      onEpisodeSelected: (selectedIdx) {
-                        _openFullPlayer(selectedIdx);
-                      },
-                    );
-                  },
+                  onTap: _showEpisodeDrawer,
                   child: _buildActionItem(
                     icon: SvgPicture.asset(
                       AppAssets.btnSeriesList,
@@ -980,7 +1083,11 @@ class _ReelItemState extends State<_ReelItem> {
   }
 
   void _showQualityPickerSheet() {
-    final available = ['1080p', '720p', '480p'];
+    // Hanya resolusi yang benar-benar punya URL untuk cuplikan ini.
+    final offered = _episodes.isNotEmpty
+        ? _episodes.first.availableQualities
+        : <String>[];
+    final available = offered.isNotEmpty ? offered : [_selectedQuality];
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF1E232E),
@@ -1018,7 +1125,9 @@ class _ReelItemState extends State<_ReelItem> {
                           ? '1080p Full HD (Kualitas Tinggi)'
                           : q == '720p'
                           ? '720p HD Standard (Rekomendasi)'
-                          : '480p Hemat Kuota (Cepat)',
+                          : q == '480p'
+                          ? '480p Hemat Kuota (Cepat)'
+                          : q,
                       style: TextStyle(
                         fontFamily: 'Urbanist',
                         fontSize: 14,

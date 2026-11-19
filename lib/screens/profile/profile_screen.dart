@@ -1,10 +1,15 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_assets.dart';
-import '../../core/player/smart_stream_proxy.dart';
 import '../../data/services/app_settings_service.dart';
+import '../../data/services/error_log_service.dart';
 import '../../data/services/update_service.dart';
 import '../player/player_screen.dart';
 
@@ -46,9 +51,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (mounted) setState(() {});
   }
 
+  /// Ukuran cache NYATA: cache gambar (CachedNetworkImage) + sisa folder
+  /// cache video lama (godrama_video_cache, ditinggal proxy yang dihapus).
   Future<void> _calculateRealCacheSize() async {
     try {
-      final bytes = await SmartStreamProxy.instance.getCacheSize();
+      final tempDir = await getTemporaryDirectory();
+      var bytes = 0;
+      for (final name in ['libCachedImageData', 'godrama_video_cache']) {
+        final dir = Directory('${tempDir.path}/$name');
+        if (await dir.exists()) {
+          await for (final e in dir.list(recursive: true)) {
+            if (e is File) bytes += await e.length();
+          }
+        }
+      }
       if (mounted) {
         setState(() {
           if (bytes < 1024) {
@@ -60,29 +76,135 @@ class _ProfileScreenState extends State<ProfileScreen> {
           }
         });
       }
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[ProfileScreen] Gagal hitung cache: $e');
       if (mounted) setState(() => _cacheSizeText = '0.0 KB');
     }
   }
 
+  /// Bersihkan cache gambar + folder cache video lama (bila masih ada).
   Future<void> _clearCache() async {
     setState(() => _isClearingCache = true);
-    await SmartStreamProxy.instance.clearCache();
-    await Future.delayed(const Duration(milliseconds: 400));
+    try {
+      await DefaultCacheManager().emptyCache();
+      final tempDir = await getTemporaryDirectory();
+      final legacy = Directory('${tempDir.path}/godrama_video_cache');
+      if (await legacy.exists()) {
+        await legacy.delete(recursive: true);
+      }
+    } catch (e) {
+      debugPrint('[ProfileScreen] Gagal bersihkan cache: $e');
+    }
+    await _calculateRealCacheSize();
     if (mounted) {
-      setState(() {
-        _isClearingCache = false;
-        _cacheSizeText = '0.0 KB';
-      });
+      setState(() => _isClearingCache = false);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           backgroundColor: Color(0xFF1E232E),
-          content: Text(
-            'Seluruh video cache dan temporary data berhasil dibersihkan!',
-          ),
+          content: Text('Cache gambar berhasil dibersihkan!'),
         ),
       );
     }
+  }
+
+  /// Sheet log error lokal (20 entri terakhir, terbaru dulu).
+  Future<void> _showErrorLogSheet() async {
+    final entries = await ErrorLogService.entries();
+    if (!mounted) return;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1E232E),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.6,
+          maxChildSize: 0.85,
+          builder: (_, scrollController) {
+            return Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Log Error',
+                        style: TextStyle(
+                          fontFamily: 'Urbanist',
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () async {
+                          await ErrorLogService.clear();
+                          if (ctx.mounted) Navigator.pop(ctx);
+                        },
+                        child: const Text(
+                          'Hapus Log',
+                          style: TextStyle(color: AppColors.primary),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: entries.isEmpty
+                        ? const Center(
+                            child: Text(
+                              'Tidak ada error tercatat.',
+                              style: TextStyle(
+                                fontFamily: 'Urbanist',
+                                fontSize: 13,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          )
+                        : ListView.separated(
+                            controller: scrollController,
+                            itemCount: entries.length,
+                            separatorBuilder: (_, __) => const Divider(
+                              color: AppColors.divider,
+                              height: 1,
+                            ),
+                            itemBuilder: (_, i) {
+                              final e = entries[i];
+                              return ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                title: Text(
+                                  '[${e['tag'] ?? '?'}] ${e['message'] ?? ''}',
+                                  maxLines: 3,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontFamily: 'Urbanist',
+                                    fontSize: 12,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  (e['ts'] ?? '').toString(),
+                                  style: const TextStyle(
+                                    fontFamily: 'Urbanist',
+                                    fontSize: 11,
+                                    color: AppColors.textMuted,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
@@ -96,12 +218,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
           padding: const EdgeInsets.all(16),
           children: [
             const SizedBox(height: 12),
-            // User Header
-            Row(
-              children: [
-                GestureDetector(
-                  onTap: _showEditProfileDialog,
-                  child: Container(
+            // Header profil — ketuk di mana saja untuk ubah nama.
+            GestureDetector(
+              onTap: _showEditProfileDialog,
+              behavior: HitTestBehavior.opaque,
+              child: Row(
+                children: [
+                  Container(
                     width: 64,
                     height: 64,
                     decoration: const BoxDecoration(
@@ -120,56 +243,53 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              settings.userName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontFamily: 'Urbanist',
-                                fontSize: 18,
-                                fontWeight: FontWeight.w800,
-                                color: AppColors.textPrimary,
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                settings.userName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontFamily: 'Urbanist',
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.textPrimary,
+                                ),
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 6),
-                          GestureDetector(
-                            onTap: _showEditProfileDialog,
-                            child: const Icon(
+                            const SizedBox(width: 6),
+                            const Icon(
                               Icons.edit_rounded,
                               color: AppColors.primary,
                               size: 16,
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'User ID: ${settings.userId}',
-                        style: const TextStyle(
-                          fontFamily: 'Urbanist',
-                          fontSize: 12,
-                          color: AppColors.textMuted,
+                          ],
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 4),
+                        Text(
+                          'User ID: ${settings.userId}',
+                          style: const TextStyle(
+                            fontFamily: 'Urbanist',
+                            fontSize: 12,
+                            color: AppColors.textMuted,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
 
             const SizedBox(height: 24),
 
-            // Real Stats Card (Interaktif)
+            // Statistik — ketuk untuk membuka daftarnya.
             Container(
               padding: const EdgeInsets.symmetric(vertical: 16),
               decoration: BoxDecoration(
@@ -190,29 +310,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     label: 'Favorit Saya',
                     onTap: _showFavoritesSheet,
                   ),
-                  _StatItem(
-                    count: 'VIP',
-                    label: 'Status Akses',
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          backgroundColor: Color(0xFF1E232E),
-                          content: Text(
-                            'Akses VIP Seumur Hidup: Bebas Iklan & Pure Protocol.',
-                          ),
-                        ),
-                      );
-                    },
-                  ),
                 ],
               ),
             ),
 
             const SizedBox(height: 24),
 
-            // Pengaturan Streaming & Media
+            // Pemutaran
             const Text(
-              'Pengaturan Streaming & Media',
+              'Pemutaran',
               style: TextStyle(
                 fontFamily: 'Urbanist',
                 fontSize: 15,
@@ -230,59 +336,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               child: Column(
                 children: [
-                  // Default Quality Selector
+                  // Kualitas video — satu-satunya pengatur resolusi
+                  // (pilih 480p bila ingin hemat kuota).
                   _buildMenuItem(
                     icon: Icons.hd_rounded,
-                    title: 'Kualitas Streaming Default',
-                    subtitle: 'Resolusi aktif: ${settings.defaultQuality}',
+                    title: 'Kualitas Video',
+                    subtitle: settings.defaultQuality,
                     onTap: _showQualitySettingsSheet,
-                  ),
-                  const Divider(
-                    color: AppColors.divider,
-                    height: 1,
-                    indent: 52,
-                  ),
-
-                  // Data Saver Mode Switch
-                  SwitchListTile(
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 4,
-                    ),
-                    secondary: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: AppColors.surfaceLight,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(
-                        Icons.data_saver_on_rounded,
-                        color: AppColors.primary,
-                        size: 20,
-                      ),
-                    ),
-                    activeColor: AppColors.primary,
-                    title: const Text(
-                      'Mode Hemat Kuota',
-                      style: TextStyle(
-                        fontFamily: 'Urbanist',
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    subtitle: const Text(
-                      'Otomatis batasi resolusi ke 480p saat streaming',
-                      style: TextStyle(
-                        fontFamily: 'Urbanist',
-                        fontSize: 11,
-                        color: AppColors.textMuted,
-                      ),
-                    ),
-                    value: settings.dataSaverMode,
-                    onChanged: (val) {
-                      settings.toggleDataSaver(val);
-                    },
                   ),
                   const Divider(
                     color: AppColors.divider,
@@ -310,7 +370,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     activeColor: AppColors.primary,
                     title: const Text(
-                      'Putar Otomatis Episode Berikutnya',
+                      'Putar Otomatis',
                       style: TextStyle(
                         fontFamily: 'Urbanist',
                         fontSize: 14,
@@ -319,7 +379,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ),
                     subtitle: const Text(
-                      'Lanjut ke episode selanjutnya tanpa jeda di pemutar',
+                      'Lanjut otomatis ke episode berikutnya',
                       style: TextStyle(
                         fontFamily: 'Urbanist',
                         fontSize: 11,
@@ -331,28 +391,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       settings.toggleAutoPlayNext(val);
                     },
                   ),
-                  const Divider(
-                    color: AppColors.divider,
-                    height: 1,
-                    indent: 52,
-                  ),
-
-                  // Bahasa & Sulih Suara
-                  _buildMenuItem(
-                    icon: Icons.translate_rounded,
-                    title: 'Bahasa & Sulih Suara',
-                    subtitle: settings.selectedLanguage,
-                    onTap: _showLanguageSettingsSheet,
-                  ),
                 ],
               ),
             ),
 
             const SizedBox(height: 24),
 
-            // Pengaturan Aplikasi & Sistem
+            // Aplikasi
             const Text(
-              'Pengaturan Sistem & Penyimpanan',
+              'Aplikasi',
               style: TextStyle(
                 fontFamily: 'Urbanist',
                 fontSize: 15,
@@ -370,27 +417,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               child: Column(
                 children: [
-                  // Riwayat Tontonan
-                  _buildMenuItem(
-                    icon: Icons.history_rounded,
-                    title: 'Riwayat Tontonan',
-                    subtitle:
-                        '${settings.watchHistory.length} drama telah ditonton',
-                    onTap: _showWatchHistorySheet,
-                  ),
-                  const Divider(
-                    color: AppColors.divider,
-                    height: 1,
-                    indent: 52,
-                  ),
-
-                  // Pembersihan Cache Nyata
+                  // Bersihkan Cache (cache gambar + sisa cache lama)
                   _buildMenuItem(
                     icon: Icons.cleaning_services_rounded,
-                    title: 'Bersihkan Cache Video',
+                    title: 'Bersihkan Cache',
                     subtitle: _isClearingCache
                         ? 'Sedang membersihkan...'
-                        : 'Ukuran cache saat ini: $_cacheSizeText',
+                        : _cacheSizeText,
                     onTap: _isClearingCache ? () {} : _clearCache,
                   ),
                   const Divider(
@@ -403,7 +436,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   _buildMenuItem(
                     icon: Icons.system_update_rounded,
                     title: 'Periksa Pembaruan',
-                    subtitle: 'GoDrama $_versionLabel (Cek rilis terbaru)',
+                    subtitle: _versionLabel,
                     onTap: () {
                       UpdateService.instance.checkForUpdate(
                         context,
@@ -420,8 +453,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   // Bantuan & Umpan Balik
                   _buildMenuItem(
                     icon: Icons.feedback_outlined,
-                    title: 'Bantuan & Laporkan Masalah',
-                    subtitle: 'Kirim masukan atau laporkan masalah video',
+                    title: 'Bantuan & Masukan',
+                    subtitle: 'Laporkan masalah atau kirim saran',
                     onTap: _showFeedbackDialog,
                   ),
                   const Divider(
@@ -430,11 +463,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     indent: 52,
                   ),
 
-                  // Tentang GoDrama
+                  // Tentang GoDrama (info aplikasi + Log Error tersembunyi)
                   _buildMenuItem(
                     icon: Icons.info_outline_rounded,
                     title: 'Tentang GoDrama',
-                    subtitle: '$_versionLabel (Clean Architecture & Pure Protocol)',
+                    subtitle: 'Tentang aplikasi ini',
                     onTap: _showAboutDialog,
                   ),
                 ],
@@ -517,7 +550,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 const Text(
-                  'Kualitas Pemutaran Default',
+                  'Kualitas Video',
                   style: TextStyle(
                     fontFamily: 'Urbanist',
                     fontSize: 16,
@@ -535,10 +568,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     title: Text(
                       q == '1080p'
-                          ? '1080p Full HD (Kualitas Tinggi)'
+                          ? '1080p · Full HD'
                           : q == '720p'
-                          ? '720p HD Standard (Direkomendasikan)'
-                          : '480p Hemat Kuota (Streaming Cepat)',
+                          ? '720p · HD'
+                          : '480p · Hemat kuota',
                       style: TextStyle(
                         color: isSelected ? AppColors.primary : Colors.white,
                         fontWeight: isSelected
@@ -551,68 +584,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         : null,
                     onTap: () {
                       AppSettingsService.instance.setDefaultQuality(q);
-                      Navigator.pop(ctx);
-                    },
-                  );
-                }),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  void _showLanguageSettingsSheet() {
-    final languages = ['Bahasa Indonesia', 'English'];
-    final current = AppSettingsService.instance.selectedLanguage;
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF1E232E),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'Pilihan Bahasa & Sulih Suara',
-                  style: TextStyle(
-                    fontFamily: 'Urbanist',
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                ...languages.map((lang) {
-                  final isSelected = lang == current;
-                  return ListTile(
-                    leading: Icon(
-                      Icons.language_rounded,
-                      color: isSelected ? AppColors.primary : Colors.white60,
-                    ),
-                    title: Text(
-                      lang == 'Bahasa Indonesia'
-                          ? 'Bahasa Indonesia (Sulih Suara Resmi)'
-                          : 'English (Original Audio)',
-                      style: TextStyle(
-                        color: isSelected ? AppColors.primary : Colors.white,
-                        fontWeight: isSelected
-                            ? FontWeight.w800
-                            : FontWeight.w500,
-                      ),
-                    ),
-                    trailing: isSelected
-                        ? const Icon(Icons.check, color: AppColors.primary)
-                        : null,
-                    onTap: () {
-                      AppSettingsService.instance.setSelectedLanguage(lang);
                       Navigator.pop(ctx);
                     },
                   );
@@ -896,7 +867,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               const Text(
-                'Ada video error atau punya saran fitur? Tulis pesan Anda di bawah:',
+                'Ada video error atau punya saran fitur? Tulis pesan Anda — '
+                'tombol Kirim membukanya sebagai issue GitHub repo GoDrama:',
                 style: TextStyle(color: Colors.white70, fontSize: 12),
               ),
               const SizedBox(height: 12),
@@ -926,16 +898,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
             ElevatedButton(
-              onPressed: () {
+              onPressed: () async {
+                final message = textController.text.trim();
                 Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    backgroundColor: Color(0xFF1E232E),
-                    content: Text(
-                      'Terima kasih! Laporan masukan Anda telah kami terima.',
-                    ),
-                  ),
+                if (message.isEmpty) return;
+                // Masukan dikirim betulan: dibuka sebagai issue GitHub
+                // (perlu login GitHub di browser untuk submit).
+                final uri = Uri.https(
+                  'github.com',
+                  '/Celosz-fle7/GODrama/issues/new',
+                  {
+                    'title': 'Masukan dari aplikasi GoDrama',
+                    'body':
+                        '$message\n\n---\nVersi aplikasi: $_versionLabel',
+                  },
                 );
+                final launched = await launchUrl(
+                  uri,
+                  mode: LaunchMode.externalApplication,
+                );
+                if (!launched && context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      backgroundColor: Color(0xFF1E232E),
+                      content: Text(
+                        'Gagal membuka browser untuk mengirim masukan.',
+                      ),
+                    ),
+                  );
+                }
               },
               child: const Text('Kirim'),
             ),
@@ -954,72 +945,65 @@ class _ProfileScreenState extends State<ProfileScreen> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
-          title: const Row(
-            children: [
-              Icon(
-                Icons.movie_filter_rounded,
-                color: Color(0xFFFF3366),
-                size: 28,
-              ),
-              SizedBox(width: 10),
-              Text(
-                'Tentang GoDrama',
-                style: TextStyle(color: Colors.white, fontFamily: 'Urbanist'),
-              ),
-            ],
+          title: const Text(
+            'Tentang GoDrama',
+            style: TextStyle(color: Colors.white, fontFamily: 'Urbanist'),
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'GoDrama - Pure Protocol Edition',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 15,
-                ),
-              ),
-              const SizedBox(height: 6),
-              const Text(
-                'Aplikasi streaming drama pendek berperforma tinggi dengan arsitektur bersih tanpa bloatware iklan.',
+                'Streaming drama pendek — tanpa iklan, tanpa ribet.',
                 style: TextStyle(
                   color: Colors.white70,
-                  fontSize: 12,
+                  fontSize: 13,
                   height: 1.4,
                 ),
               ),
               const SizedBox(height: 12),
-              const Divider(color: Colors.white12),
-              const SizedBox(height: 6),
               Text(
-                '• Versi: ${UpdateService.instance.currentVersionLabel} (Release Universal)',
+                'Versi $_versionLabel',
                 style: const TextStyle(color: Colors.white70, fontSize: 12),
               ),
-              SizedBox(height: 4),
-              Text(
-                '• Gateway: Transsion Istio-Envoy CDN',
-                style: TextStyle(color: Colors.white70, fontSize: 12),
-              ),
-              SizedBox(height: 4),
-              Text(
-                '• Decoder: HTTP 206 Multi-Resolution Range',
-                style: TextStyle(color: Colors.white70, fontSize: 12),
-              ),
-              SizedBox(height: 4),
-              Text(
-                '• Status: Bebas Iklan & Bebas Izin Mencurigakan',
-                style: TextStyle(color: Colors.white70, fontSize: 12),
+              const SizedBox(height: 12),
+              const Divider(color: Colors.white12),
+              // Log Error disembunyikan di sini: alat debugging, bukan
+              // menu user — tetap terjangkau bila dibutuhkan.
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(
+                  Icons.bug_report_outlined,
+                  color: AppColors.textMuted,
+                  size: 20,
+                ),
+                title: const Text(
+                  'Log Error',
+                  style: TextStyle(color: Colors.white, fontSize: 13),
+                ),
+                subtitle: const Text(
+                  '20 error terakhir, untuk debugging',
+                  style: TextStyle(color: Colors.white54, fontSize: 11),
+                ),
+                trailing: const Icon(
+                  Icons.chevron_right_rounded,
+                  color: AppColors.textMuted,
+                  size: 20,
+                ),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showErrorLogSheet();
+                },
               ),
             ],
           ),
           actions: [
-            ElevatedButton(
+            TextButton(
               onPressed: () => Navigator.pop(ctx),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
+              child: const Text(
+                'Tutup',
+                style: TextStyle(color: AppColors.primary),
               ),
-              child: const Text('Tutup'),
             ),
           ],
         );

@@ -116,6 +116,22 @@ class EpisodeModel {
     }
     return videoUrl;
   }
+
+  /// Resolusi yang benar-benar tersedia untuk episode ini (dari peta
+  /// resolutions server), dari tertinggi ke terendah. Picker kualitas
+  /// memakai ini — jangan tampilkan resolusi yang tidak ada URL-nya.
+  List<String> get availableQualities {
+    final keys = resolutions.keys.toList();
+    keys.sort(
+      (a, b) => _resolutionValue(b).compareTo(_resolutionValue(a)),
+    );
+    return keys;
+  }
+
+  static int _resolutionValue(String label) {
+    final digits = label.replaceAll(RegExp(r'[^0-9]'), '');
+    return int.tryParse(digits) ?? 0;
+  }
 }
 
 class CategoryModel {

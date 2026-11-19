@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
@@ -21,6 +23,16 @@ class _SearchScreenState extends State<SearchScreen> {
   bool _isSearching = false;
   bool _isLoadingResults = false;
   List<DramaModel> _trendingDramas = [];
+  // Debounce: request hanya jalan 400 ms setelah ketikan berhenti.
+  Timer? _debounceTimer;
+  // Pagination hasil pencarian.
+  final ScrollController _resultsController = ScrollController();
+  final Set<String> _seenResultIds = {};
+  String _currentQuery = '';
+  int _currentPage = 1;
+  bool _hasMoreResults = false;
+  bool _isLoadingMoreResults = false;
+  static const _resultsPageSize = 20;
 
   final List<String> _trendingTags = [
     'Sulih Suara',
@@ -35,23 +47,55 @@ class _SearchScreenState extends State<SearchScreen> {
   @override
   void initState() {
     super.initState();
+    _resultsController.addListener(_onResultsScroll);
     _loadTrending();
   }
 
+  @override
+  void dispose() {
+    _debounceTimer?.cancel();
+    _resultsController.removeListener(_onResultsScroll);
+    _resultsController.dispose();
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _onResultsScroll() {
+    if (!_resultsController.hasClients) return;
+    final nearBottom =
+        _resultsController.position.pixels >=
+        _resultsController.position.maxScrollExtent - 400;
+    if (nearBottom && _hasMoreResults && !_isLoadingMoreResults) {
+      _loadMoreResults();
+    }
+  }
+
+  /// Landing "Top Trending": dari seksi operasional saja (1 request,
+  /// di-cache 10 menit) — bukan algoritma For You yang 13 request.
   Future<void> _loadTrending() async {
-    final live = await ShortTvService.instance.fetchForYouAlgorithm();
-    if (mounted && live.isNotEmpty) {
+    final sections = await ShortTvService.instance.fetchOperatingSections(
+      tabId: 13,
+    );
+    if (!mounted) return;
+    final seen = <String>{};
+    final merged = sections.values
+        .expand((l) => l)
+        .where((d) => d.id.isNotEmpty && seen.add(d.id))
+        .toList();
+    if (merged.isNotEmpty) {
       setState(() {
-        _trendingDramas = live;
+        _trendingDramas = merged;
       });
     }
   }
 
-  void _onSearch(String query) async {
+  void _onSearch(String query) {
+    _debounceTimer?.cancel();
     if (query.trim().isEmpty) {
       setState(() {
         _isSearching = false;
         _results = [];
+        _isLoadingResults = false;
       });
       return;
     }
@@ -60,14 +104,56 @@ class _SearchScreenState extends State<SearchScreen> {
       _isSearching = true;
       _isLoadingResults = true;
     });
+    // Tunggu ketikan berhenti 400 ms sebelum menembak server.
+    _debounceTimer = Timer(
+      const Duration(milliseconds: 400),
+      () => _performSearch(query),
+    );
+  }
 
-    final remoteResults = await ShortTvService.instance.searchShortTv(query);
-    if (mounted && _isSearching && _searchController.text == query) {
-      setState(() {
-        _results = remoteResults;
-        _isLoadingResults = false;
-      });
+  Future<void> _performSearch(String query) async {
+    if (!mounted || _searchController.text != query) return;
+    final remoteResults = await ShortTvService.instance.searchShortTv(
+      query,
+      page: 1,
+      perPage: _resultsPageSize,
+    );
+    if (!mounted || !_isSearching || _searchController.text != query) return;
+    _seenResultIds
+      ..clear()
+      ..addAll(remoteResults.map((d) => d.id));
+    setState(() {
+      _results = remoteResults;
+      _currentQuery = query;
+      _currentPage = 1;
+      _hasMoreResults = remoteResults.length >= _resultsPageSize;
+      _isLoadingResults = false;
+    });
+  }
+
+  Future<void> _loadMoreResults() async {
+    if (_isLoadingMoreResults || !_hasMoreResults) return;
+    setState(() => _isLoadingMoreResults = true);
+    final nextPage = _currentPage + 1;
+    final query = _currentQuery;
+    final remoteResults = await ShortTvService.instance.searchShortTv(
+      query,
+      page: nextPage,
+      perPage: _resultsPageSize,
+    );
+    if (!mounted) return;
+    // Abaikan bila user sudah mengganti kueri selama request berjalan.
+    if (query != _currentQuery || !_isSearching) {
+      setState(() => _isLoadingMoreResults = false);
+      return;
     }
+    final fresh = remoteResults.where((d) => _seenResultIds.add(d.id)).toList();
+    setState(() {
+      _results.addAll(fresh);
+      _currentPage = nextPage;
+      _hasMoreResults = remoteResults.length >= _resultsPageSize;
+      _isLoadingMoreResults = false;
+    });
   }
 
   @override
@@ -340,6 +426,7 @@ class _SearchScreenState extends State<SearchScreen> {
     }
 
     return GridView.builder(
+      controller: _resultsController,
       padding: const EdgeInsets.all(16),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
@@ -347,8 +434,13 @@ class _SearchScreenState extends State<SearchScreen> {
         mainAxisSpacing: 16,
         childAspectRatio: 0.58,
       ),
-      itemCount: _results.length,
+      itemCount: _results.length + (_isLoadingMoreResults ? 1 : 0),
       itemBuilder: (context, index) {
+        if (index >= _results.length) {
+          return const Center(
+            child: CircularProgressIndicator(color: AppColors.primary),
+          );
+        }
         final drama = _results[index];
         return DramaCard(
           drama: drama,
