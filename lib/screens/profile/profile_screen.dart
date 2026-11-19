@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
@@ -19,6 +17,7 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   String _cacheSizeText = 'Menghitung...';
+  String _versionLabel = 'Memuat...';
   bool _isClearingCache = false;
 
   @override
@@ -26,6 +25,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.initState();
     _calculateRealCacheSize();
     AppSettingsService.instance.addListener(_onSettingsChanged);
+    // Muat versi terpasang asli (bukan hardcoded) untuk label versi.
+    UpdateService.instance.ensureVersionLoaded().then((_) {
+      if (mounted) {
+        setState(() {
+          final label = UpdateService.instance.currentVersionLabel;
+          _versionLabel = label.isEmpty ? 'tidak diketahui' : label;
+        });
+      }
+    });
   }
 
   @override
@@ -395,7 +403,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   _buildMenuItem(
                     icon: Icons.system_update_rounded,
                     title: 'Periksa Pembaruan',
-                    subtitle: 'GoDrama v1.0.1 (Cek rilis terbaru)',
+                    subtitle: 'GoDrama $_versionLabel (Cek rilis terbaru)',
                     onTap: () {
                       UpdateService.instance.checkForUpdate(
                         context,
@@ -426,7 +434,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   _buildMenuItem(
                     icon: Icons.info_outline_rounded,
                     title: 'Tentang GoDrama',
-                    subtitle: 'v1.0.1 (Clean Architecture & Pure Protocol)',
+                    subtitle: '$_versionLabel (Clean Architecture & Pure Protocol)',
                     onTap: _showAboutDialog,
                   ),
                 ],
@@ -618,7 +626,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _showWatchHistorySheet() {
-    final history = AppSettingsService.instance.watchHistory;
+    final history = AppSettingsService.instance.historyEntries;
 
     showModalBottomSheet(
       context: context,
@@ -681,7 +689,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         controller: scrollController,
                         itemCount: history.length,
                         itemBuilder: (context, idx) {
-                          final drama = history[idx];
+                          final entry = history[idx];
+                          final drama = entry.drama;
+                          final epLabel = drama.totalEpisodes > 0
+                              ? 'Ep. ${entry.progress.episodeIndex + 1} / ${drama.totalEpisodes}'
+                              : 'Ep. ${entry.progress.episodeIndex + 1}';
                           return ListTile(
                             contentPadding: const EdgeInsets.symmetric(
                               vertical: 4,
@@ -710,7 +722,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               ),
                             ),
                             subtitle: Text(
-                              '${drama.totalEpisodes} Episode • ${drama.category}',
+                              '$epLabel • ${drama.category}',
                               style: const TextStyle(
                                 color: Colors.white54,
                                 fontSize: 12,
@@ -725,7 +737,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (_) => PlayerScreen(drama: drama),
+                                  builder: (_) => PlayerScreen(
+                                    drama: drama,
+                                    initialEpisodeIndex:
+                                        entry.progress.episodeIndex,
+                                  ),
                                 ),
                               );
                             },
@@ -743,9 +759,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _showFavoritesSheet() {
-    final favIds = AppSettingsService.instance.favoriteIds;
-    final history = AppSettingsService.instance.watchHistory;
-    final favDramas = history.where((d) => favIds.contains(d.id)).toList();
+    // Favorit tersimpan sebagai objek drama lengkap — tidak perlu lagi
+    // dicocokkan dengan riwayat, dan tidak ada lagi baris "Drama ID: xxx".
+    final favDramas = AppSettingsService.instance.favoriteDramas;
 
     showModalBottomSheet(
       context: context,
@@ -768,7 +784,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'Drama Favorit Saya (${favIds.length})',
+                        'Drama Favorit Saya (${favDramas.length})',
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 17,
@@ -779,11 +795,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ],
                   ),
                   const Divider(color: Colors.white12),
-                  if (favIds.isEmpty)
+                  if (favDramas.isEmpty)
                     const Expanded(
                       child: Center(
                         child: Text(
-                          'Belum ada drama favorit tersimpan.\nKlik ikon bookmark di video untuk menyimpan.',
+                          'Belum ada drama favorit tersimpan.\nKlik ikon hati di video untuk menyimpan.',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: Colors.white54,
@@ -797,80 +813,59 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     Expanded(
                       child: ListView.builder(
                         controller: scrollController,
-                        itemCount: favDramas.isNotEmpty
-                            ? favDramas.length
-                            : favIds.length,
+                        itemCount: favDramas.length,
                         itemBuilder: (context, idx) {
-                          if (favDramas.isNotEmpty) {
-                            final drama = favDramas[idx];
-                            return ListTile(
-                              contentPadding: const EdgeInsets.symmetric(
-                                vertical: 4,
-                              ),
-                              leading: ClipRRect(
-                                borderRadius: BorderRadius.circular(6),
-                                child: Image.network(
-                                  drama.coverUrl,
+                          final drama = favDramas[idx];
+                          return ListTile(
+                            contentPadding: const EdgeInsets.symmetric(
+                              vertical: 4,
+                            ),
+                            leading: ClipRRect(
+                              borderRadius: BorderRadius.circular(6),
+                              child: Image.network(
+                                drama.coverUrl,
+                                width: 44,
+                                height: 56,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => Container(
+                                  color: Colors.grey.shade900,
                                   width: 44,
                                   height: 56,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => Container(
-                                    color: Colors.grey.shade900,
-                                    width: 44,
-                                    height: 56,
-                                  ),
                                 ),
                               ),
-                              title: Text(
-                                drama.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
+                            ),
+                            title: Text(
+                              drama.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            subtitle: Text(
+                              drama.totalEpisodes > 0
+                                  ? '${drama.totalEpisodes} Episode'
+                                  : drama.category,
+                              style: const TextStyle(
+                                color: Colors.white54,
+                                fontSize: 12,
+                              ),
+                            ),
+                            trailing: const Icon(
+                              Icons.play_circle_fill_rounded,
+                              color: AppColors.primary,
+                            ),
+                            onTap: () {
+                              Navigator.pop(ctx);
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => PlayerScreen(drama: drama),
                                 ),
-                              ),
-                              subtitle: Text(
-                                '${drama.totalEpisodes} Episode',
-                                style: const TextStyle(
-                                  color: Colors.white54,
-                                  fontSize: 12,
-                                ),
-                              ),
-                              trailing: const Icon(
-                                Icons.play_circle_fill_rounded,
-                                color: AppColors.primary,
-                              ),
-                              onTap: () {
-                                Navigator.pop(ctx);
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => PlayerScreen(drama: drama),
-                                  ),
-                                );
-                              },
-                            );
-                          } else {
-                            final dramaId = favIds.elementAt(idx);
-                            return ListTile(
-                              leading: const Icon(
-                                Icons.bookmark_rounded,
-                                color: Color(0xFFFF3366),
-                              ),
-                              title: Text(
-                                'Drama ID: $dramaId',
-                                style: const TextStyle(color: Colors.white),
-                              ),
-                              subtitle: const Text(
-                                'Tersimpan di daftar favorit',
-                                style: TextStyle(
-                                  color: Colors.white54,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            );
-                          }
+                              );
+                            },
+                          );
                         },
                       ),
                     ),
@@ -973,11 +968,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ],
           ),
-          content: const Column(
+          content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
+              const Text(
                 'GoDrama - Pure Protocol Edition',
                 style: TextStyle(
                   color: Colors.white,
@@ -985,8 +980,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   fontSize: 15,
                 ),
               ),
-              SizedBox(height: 6),
-              Text(
+              const SizedBox(height: 6),
+              const Text(
                 'Aplikasi streaming drama pendek berperforma tinggi dengan arsitektur bersih tanpa bloatware iklan.',
                 style: TextStyle(
                   color: Colors.white70,
@@ -994,12 +989,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   height: 1.4,
                 ),
               ),
-              SizedBox(height: 12),
-              Divider(color: Colors.white12),
-              SizedBox(height: 6),
+              const SizedBox(height: 12),
+              const Divider(color: Colors.white12),
+              const SizedBox(height: 6),
               Text(
-                '• Versi: v1.0.1 (Release Universal)',
-                style: TextStyle(color: Colors.white70, fontSize: 12),
+                '• Versi: ${UpdateService.instance.currentVersionLabel} (Release Universal)',
+                style: const TextStyle(color: Colors.white70, fontSize: 12),
               ),
               SizedBox(height: 4),
               Text(

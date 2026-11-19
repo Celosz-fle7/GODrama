@@ -92,14 +92,15 @@ class _EpisodeDrawerState extends State<EpisodeDrawer> {
                         color: AppColors.textPrimary,
                       ),
                     ),
-                    Text(
-                      'Updated to Ep. $totalEpisodes',
-                      style: const TextStyle(
-                        fontFamily: 'Urbanist',
-                        fontSize: 12,
-                        color: AppColors.textSecondary,
+                    if (totalEpisodes > 0)
+                      Text(
+                        'Updated to Ep. $totalEpisodes',
+                        style: const TextStyle(
+                          fontFamily: 'Urbanist',
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                        ),
                       ),
-                    ),
                   ],
                 ),
                 IconButton(

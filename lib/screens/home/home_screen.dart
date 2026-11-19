@@ -245,28 +245,71 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
-              // 2-Column Responsive Drama Grid
-              SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                sliver: SliverGrid(
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 16,
-                    childAspectRatio: 0.58,
+              // 2-Column Responsive Drama Grid / Loading / Gagal+Retry
+              if (_isLoading)
+                const SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Center(
+                    child: CircularProgressIndicator(color: AppColors.primary),
                   ),
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      final drama = dramas[index];
-                      return DramaCard(
-                        drama: drama,
-                        onTap: () => _openPlayer(drama),
-                      );
-                    },
-                    childCount: dramas.length,
+                )
+              else if (dramas.isEmpty)
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.cloud_off_rounded,
+                          color: AppColors.textMuted,
+                          size: 48,
+                        ),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'Gagal memuat drama',
+                          style: TextStyle(
+                            fontFamily: 'Urbanist',
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: () => _loadDramas(forceRefresh: true),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                          ),
+                          child: const Text('Coba Lagi'),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  sliver: SliverGrid(
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 16,
+                      childAspectRatio: 0.58,
+                    ),
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        final drama = dramas[index];
+                        return DramaCard(
+                          drama: drama,
+                          onTap: () => _openPlayer(drama),
+                        );
+                      },
+                      childCount: dramas.length,
+                    ),
                   ),
                 ),
-              ),
 
               const SliverToBoxAdapter(child: SizedBox(height: 32)),
             ],

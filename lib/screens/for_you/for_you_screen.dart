@@ -157,10 +157,10 @@ class _ReelItemState extends State<_ReelItem> {
 
   // Menu Pengaturan Cuplikan (diakses via Titik 3)
   String _selectedQuality = '1080p';
-  bool _subtitleEnabled = true;
-  String _subtitleLanguage = 'Bahasa Indonesia';
   double _playbackSpeed = 1.0;
   bool _clearViewMode = false;
+  // Gagal load episode / init video cuplikan.
+  bool _videoError = false;
 
   // Scrubber State
   bool _isDraggingScrubber = false;
@@ -171,7 +171,6 @@ class _ReelItemState extends State<_ReelItem> {
   void initState() {
     super.initState();
     _selectedQuality = AppSettingsService.instance.defaultQuality;
-    _subtitleEnabled = AppSettingsService.instance.subtitlesEnabled;
     _episodes = widget.drama.episodes;
     if (widget.isActive) {
       _initTeaserVideo();
@@ -190,6 +189,7 @@ class _ReelItemState extends State<_ReelItem> {
 
   /// Memutar cuplikan (Episode 1) secara looping sebagai teaser
   Future<void> _initTeaserVideo() async {
+    if (mounted) setState(() => _videoError = false);
     if (_episodes.isEmpty && !_isLoadingEpisodes) {
       _isLoadingEpisodes = true;
       final liveEps = await ShortTvService.instance.fetchShortTvEpisodes(
@@ -203,7 +203,10 @@ class _ReelItemState extends State<_ReelItem> {
       }
     }
 
-    if (_episodes.isEmpty) return;
+    if (_episodes.isEmpty) {
+      if (mounted) setState(() => _videoError = true);
+      return;
+    }
     // Cuplikan For You selalu memainkan Episode 1 (Teaser)
     final teaserEp = _episodes.first;
 
@@ -228,6 +231,7 @@ class _ReelItemState extends State<_ReelItem> {
           })
           .catchError((err) {
             debugPrint('[ForYouScreen] Video init error: $err');
+            if (mounted) setState(() => _videoError = true);
           });
   }
 
@@ -417,44 +421,39 @@ class _ReelItemState extends State<_ReelItem> {
           ),
         ),
 
-        // Subtitle Overlay (Jika Aktif dan Tidak dalam Clear View)
-        if (_subtitleEnabled && !_clearViewMode)
-          Positioned(
-            left: 20,
-            right: 80,
-            bottom: 155,
+        // Error cuplikan: video gagal dimuat, tawarkan coba lagi.
+        if (_videoError &&
+            (_videoController == null ||
+                !_videoController!.value.isInitialized))
+          Positioned.fill(
             child: Center(
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.72),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.white.withOpacity(0.1)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      Icons.closed_caption_rounded,
-                      color: Color(0xFFFF3366),
-                      size: 16,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.cloud_off_rounded,
+                    color: Colors.white70,
+                    size: 40,
+                  ),
+                  const SizedBox(height: 10),
+                  const Text(
+                    'Video gagal dimuat',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontFamily: 'Urbanist',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
                     ),
-                    const SizedBox(width: 6),
-                    Flexible(
-                      child: Text(
-                        '[$_subtitleLanguage - Sulih Suara Resmi]',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+                  ),
+                  const SizedBox(height: 12),
+                  ElevatedButton(
+                    onPressed: _initTeaserVideo,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
                     ),
-                  ],
-                ),
+                    child: const Text('Coba Lagi'),
+                  ),
+                ],
               ),
             ),
           ),
@@ -537,7 +536,9 @@ class _ReelItemState extends State<_ReelItem> {
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          'Tonton Semua Episode ($totalEps Ep)',
+                          totalEps > 0
+                              ? 'Tonton Semua Episode ($totalEps Ep)'
+                              : 'Tonton Semua Episode',
                           style: const TextStyle(
                             fontFamily: 'Urbanist',
                             fontSize: 13,
@@ -644,7 +645,7 @@ class _ReelItemState extends State<_ReelItem> {
                 ),
                 const SizedBox(height: 16),
 
-                // 3. MENU TITIK 3 (Kualitas, Subtitle, Speed, Mode Bersih, Bagikan)
+                // 3. MENU TITIK 3 (Kualitas, Speed, Mode Bersih, Bagikan)
                 GestureDetector(
                   onTap: _showMoreOptionsMenu,
                   child: _buildActionItem(
@@ -806,7 +807,7 @@ class _ReelItemState extends State<_ReelItem> {
     );
   }
 
-  /// MODAL TITIK 3 LENGKAP & MODERN (Kualitas, Subtitle, Kecepatan, Clear View, Share)
+  /// MODAL TITIK 3 LENGKAP & MODERN (Kualitas, Kecepatan, Clear View, Share)
   void _showMoreOptionsMenu() {
     showModalBottomSheet(
       context: context,
@@ -877,44 +878,7 @@ class _ReelItemState extends State<_ReelItem> {
                     ),
                     const Divider(color: Colors.white10),
 
-                    // 2. Opsi Subtitle & Audio
-                    ListTile(
-                      leading: Icon(
-                        _subtitleEnabled
-                            ? Icons.closed_caption_rounded
-                            : Icons.closed_caption_off_rounded,
-                        color: _subtitleEnabled
-                            ? const Color(0xFFFF3366)
-                            : Colors.white60,
-                      ),
-                      title: const Text(
-                        'Subtitle & Sulih Suara',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      subtitle: Text(
-                        _subtitleEnabled
-                            ? 'Aktif ($_subtitleLanguage)'
-                            : 'Nonaktif',
-                        style: const TextStyle(
-                          color: Colors.white60,
-                          fontSize: 12,
-                        ),
-                      ),
-                      trailing: const Icon(
-                        Icons.chevron_right_rounded,
-                        color: Colors.white54,
-                      ),
-                      onTap: () {
-                        Navigator.pop(ctx);
-                        _showSubtitleSheet();
-                      },
-                    ),
-                    const Divider(color: Colors.white10),
-
-                    // 3. Opsi Kecepatan Putar (Playback Speed)
+                    // 2. Opsi Kecepatan Putar (Playback Speed)
                     ListTile(
                       leading: const Icon(
                         Icons.speed_rounded,
@@ -945,7 +909,7 @@ class _ReelItemState extends State<_ReelItem> {
                     ),
                     const Divider(color: Colors.white10),
 
-                    // 4. Opsi Mode Bersih (Clear View)
+                    // 3. Opsi Mode Bersih (Clear View)
                     ListTile(
                       leading: const Icon(
                         Icons.visibility_off_rounded,
@@ -971,7 +935,7 @@ class _ReelItemState extends State<_ReelItem> {
                     ),
                     const Divider(color: Colors.white10),
 
-                    // 5. Bagikan Drama (Share)
+                    // 4. Bagikan Drama (Share)
                     ListTile(
                       leading: const Icon(
                         Icons.share_rounded,
@@ -1081,152 +1045,6 @@ class _ReelItemState extends State<_ReelItem> {
               ],
             ),
           ),
-        );
-      },
-    );
-  }
-
-  void _showSubtitleSheet() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF1E232E),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            return SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Center(
-                      child: Text(
-                        'Subtitle & Audio Sulih Suara',
-                        style: TextStyle(
-                          fontFamily: 'Urbanist',
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-
-                    // Info Sulih Suara
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF141720),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: const Color(0xFFFF3366).withOpacity(0.3),
-                        ),
-                      ),
-                      child: const Row(
-                        children: [
-                          Icon(
-                            Icons.mic_external_on_rounded,
-                            color: Color(0xFFFF3366),
-                            size: 24,
-                          ),
-                          SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Audio: Sulih Suara Bahasa Indonesia',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                                SizedBox(height: 2),
-                                Text(
-                                  'Audio studio asli Indonesia terintegrasi bawaan server',
-                                  style: TextStyle(
-                                    color: Colors.white60,
-                                    fontSize: 11,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      activeColor: const Color(0xFFFF3366),
-                      title: const Text(
-                        'Tampilkan Subtitle Teks',
-                        style: TextStyle(color: Colors.white),
-                      ),
-                      value: _subtitleEnabled,
-                      onChanged: (val) {
-                        setSheetState(() => _subtitleEnabled = val);
-                        setState(() => _subtitleEnabled = val);
-                        AppSettingsService.instance.toggleSubtitles(val);
-                      },
-                    ),
-
-                    if (_subtitleEnabled) ...[
-                      const Divider(color: Colors.white10),
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: const Icon(
-                          Icons.translate_rounded,
-                          color: Colors.white70,
-                        ),
-                        title: const Text(
-                          'Bahasa Indonesia',
-                          style: TextStyle(color: Colors.white),
-                        ),
-                        trailing: _subtitleLanguage == 'Bahasa Indonesia'
-                            ? const Icon(Icons.check, color: Color(0xFFFF3366))
-                            : null,
-                        onTap: () {
-                          setSheetState(
-                            () => _subtitleLanguage = 'Bahasa Indonesia',
-                          );
-                          setState(
-                            () => _subtitleLanguage = 'Bahasa Indonesia',
-                          );
-                          Navigator.pop(ctx);
-                        },
-                      ),
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: const Icon(
-                          Icons.language_rounded,
-                          color: Colors.white70,
-                        ),
-                        title: const Text(
-                          'English (Original)',
-                          style: TextStyle(color: Colors.white),
-                        ),
-                        trailing: _subtitleLanguage == 'English'
-                            ? const Icon(Icons.check, color: Color(0xFFFF3366))
-                            : null,
-                        onTap: () {
-                          setSheetState(() => _subtitleLanguage = 'English');
-                          setState(() => _subtitleLanguage = 'English');
-                          Navigator.pop(ctx);
-                        },
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            );
-          },
         );
       },
     );

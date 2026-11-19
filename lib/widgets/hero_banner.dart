@@ -159,15 +159,23 @@ class _HeroBannerState extends State<HeroBanner> {
                                     ],
                                   ),
                                 ),
-                                const SizedBox(width: 12),
-                                Text(
-                                  '${drama.totalEpisodes} Episodes • ${drama.viewCount} views',
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w500,
-                                    color: AppColors.textSecondary,
+                                if (drama.totalEpisodes > 0 ||
+                                    drama.viewCount.isNotEmpty) ...[
+                                  const SizedBox(width: 12),
+                                  Text(
+                                    [
+                                      if (drama.totalEpisodes > 0)
+                                        '${drama.totalEpisodes} Episodes',
+                                      if (drama.viewCount.isNotEmpty)
+                                        '${drama.viewCount} views',
+                                    ].join(' • '),
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                      color: AppColors.textSecondary,
+                                    ),
                                   ),
-                                ),
+                                ],
                               ],
                             ),
                           ],

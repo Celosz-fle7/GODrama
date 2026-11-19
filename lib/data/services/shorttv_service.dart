@@ -697,37 +697,36 @@ class ShortTvService {
         json['miniId']?.toString() ??
         '';
     final title = json['title']?.toString() ?? 'Short Drama';
+    // Tanpa deskripsi dari server, kosongkan — jangan karang deskripsi.
     final desc =
-        json['description']?.toString() ??
-        json['brief']?.toString() ??
-        'Drama pendek populer ber-subtitle dan bersulih suara Indonesia.';
+        json['description']?.toString() ?? json['brief']?.toString() ?? '';
     final cover = _extractImageUrl(json['cover']);
     final banner = _extractImageUrl(json['banner']).isNotEmpty
         ? _extractImageUrl(json['banner'])
         : cover;
+    // 0 = server tidak memberi jumlah episode (angka riil didapat saat
+    // daftar episode di-fetch). Jangan default 50.
     final totalEpisodes =
         (json['totalEpisodes'] as num?)?.toInt() ??
         (json['episodesCount'] as num?)?.toInt() ??
         (json['episodeCount'] as num?)?.toInt() ??
-        50;
+        0;
 
     final tags = <String>[];
     if (json['genre'] != null) tags.add(json['genre'].toString());
     if (json['classify'] != null) tags.add(json['classify'].toString());
-    if (tags.isEmpty) tags.addAll(['Trending', 'Sulih Suara', 'Romansa']);
 
-    final viewCountNum =
-        (json['viewCount'] as num?)?.toInt() ??
-        (json['playCount'] as num?)?.toInt() ??
-        Random().nextInt(80000) + 12000;
-    final viewCountStr = viewCountNum > 1000
-        ? '${(viewCountNum / 1000).toStringAsFixed(1)}K'
-        : '$viewCountNum';
+    // Tanpa angka penonton dari server, kosongkan — jangan acak.
+    final viewCountNum = (json['viewCount'] as num?)?.toInt() ??
+        (json['playCount'] as num?)?.toInt();
+    final viewCountStr = viewCountNum == null
+        ? ''
+        : viewCountNum > 1000
+            ? '${(viewCountNum / 1000).toStringAsFixed(1)}K'
+            : '$viewCountNum';
 
-    final rating =
-        ((json['rating'] as num?)?.toDouble() ??
-                (4.5 + Random().nextDouble() * 0.4))
-            .clamp(4.0, 5.0);
+    // Tanpa rating dari server, null — jangan acak 4.5-4.9.
+    final rating = (json['rating'] as num?)?.toDouble();
 
     return DramaModel(
       id: subjectId,
@@ -738,8 +737,10 @@ class ShortTvService {
       tags: tags,
       totalEpisodes: totalEpisodes,
       viewCount: viewCountStr,
-      rating: double.parse(rating.toStringAsFixed(1)),
-      isTrending: true,
+      rating: rating == null
+          ? null
+          : double.parse(rating.clamp(0.0, 5.0).toStringAsFixed(1)),
+      isTrending: false,
       episodes: const [],
     );
   }

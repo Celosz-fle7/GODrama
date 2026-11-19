@@ -31,9 +31,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
   List<EpisodeModel> _episodes = [];
   bool _isLoadingEpisodes = false;
   String _selectedQuality = '1080p';
-  bool _subtitlesEnabled = true;
-  final String _subtitleLanguage = 'Bahasa Indonesia';
   double _playbackSpeed = 1.0;
+  // Error state: gagal load daftar episode / gagal init video.
+  bool _episodesFailed = false;
+  String? _videoError;
 
   // Scrubber state
   bool _isDraggingScrubber = false;
@@ -46,8 +47,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
     super.initState();
     _currentEpisodeIndex = widget.initialEpisodeIndex;
     _selectedQuality = AppSettingsService.instance.defaultQuality;
-    _subtitlesEnabled = AppSettingsService.instance.subtitlesEnabled;
     _episodes = widget.drama.episodes;
+    // Lanjutkan dari progres tersimpan bila pemanggil tidak minta episode
+    // tertentu (mis. dibuka dari Home/Search/Favorit, bukan dari Riwayat).
+    if (_currentEpisodeIndex == 0) {
+      final saved = AppSettingsService.instance.progressFor(widget.drama.id);
+      if (saved != null && saved.episodeIndex > 0) {
+        _currentEpisodeIndex = saved.episodeIndex;
+      }
+    }
     _setupVideo();
     _resetControlsTimer();
   }
@@ -65,7 +73,35 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
   }
 
+  /// Simpan episode + posisi saat ini agar bisa dilanjutkan nanti.
+  void _saveProgress() {
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized) return;
+    final duration = controller.value.duration;
+    if (duration <= Duration.zero) return;
+    AppSettingsService.instance.updateWatchProgress(
+      widget.drama.id,
+      episodeIndex: _currentEpisodeIndex,
+      positionSeconds: controller.value.position.inSeconds,
+      durationSeconds: duration.inSeconds,
+    );
+  }
+
+  void _retryVideo() {
+    setState(() {
+      _videoError = null;
+      _episodesFailed = false;
+    });
+    _setupVideo();
+  }
+
   Future<void> _setupVideo() async {
+    if (mounted) {
+      setState(() {
+        _episodesFailed = false;
+        _videoError = null;
+      });
+    }
     if (_episodes.isEmpty && !_isLoadingEpisodes) {
       _isLoadingEpisodes = true;
       final targetEps = widget.drama.totalEpisodes > 0
@@ -77,17 +113,25 @@ class _PlayerScreenState extends State<PlayerScreen> {
         endPosition: targetEps,
       );
       _isLoadingEpisodes = false;
-      if (mounted && liveEps.isNotEmpty) {
+      if (!mounted) return;
+      if (liveEps.isNotEmpty) {
         setState(() {
           _episodes = liveEps;
         });
+      } else {
+        // Gagal load episode: tampilkan error + retry, bukan spinner selamanya.
+        setState(() {
+          _episodesFailed = true;
+        });
+        return;
       }
     }
 
     if (_episodes.isEmpty) return;
-    final ep = _episodes[_currentEpisodeIndex.clamp(0, _episodes.length - 1)];
+    _currentEpisodeIndex = _currentEpisodeIndex.clamp(0, _episodes.length - 1);
+    final ep = _episodes[_currentEpisodeIndex];
 
-    // Catat ke riwayat tontonan
+    // Catat ke riwayat tontonan (progres lama dipertahankan).
     AppSettingsService.instance.addToWatchHistory(widget.drama);
 
     if (!ep.resolutions.containsKey(_selectedQuality) &&
@@ -103,6 +147,22 @@ class _PlayerScreenState extends State<PlayerScreen> {
       ..initialize()
           .then((_) {
             if (mounted) {
+              // Resume posisi tersimpan bila episode ini yang terakhir ditonton.
+              // Posisi di 5 detik terakhir dianggap sudah tamat: mulai dari 0.
+              final saved = AppSettingsService.instance
+                  .progressFor(widget.drama.id);
+              final duration = _controller!.value.duration;
+              final shouldResume =
+                  saved != null &&
+                  saved.episodeIndex == _currentEpisodeIndex &&
+                  saved.positionSeconds > 0 &&
+                  duration > Duration.zero &&
+                  saved.positionSeconds < duration.inSeconds - 5;
+              if (shouldResume) {
+                _controller?.seekTo(
+                  Duration(seconds: saved.positionSeconds),
+                );
+              }
               _controller?.setPlaybackSpeed(_playbackSpeed);
               _controller?.play();
               setState(() {});
@@ -124,6 +184,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 },
               );
 
+              // Simpan progres awal episode ini. Saat resume, jangan timpa
+              // posisi tersimpan (seek masih berjalan, posisi terbaca 0).
+              if (!shouldResume) _saveProgress();
+
               // Preload episode berikutnya di latar belakang
               if (_currentEpisodeIndex + 1 < _episodes.length) {
                 final nextEp = _episodes[_currentEpisodeIndex + 1];
@@ -133,6 +197,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
           })
           .catchError((err) {
             debugPrint('[PlayerScreen] Video init error: $err');
+            if (mounted) {
+              setState(() {
+                _videoError =
+                    'Video gagal dimuat. Periksa koneksi lalu coba lagi.';
+              });
+            }
           });
   }
 
@@ -151,6 +221,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final currentPos = _controller!.value.position;
     setState(() {
       _selectedQuality = quality;
+      _videoError = null;
     });
 
     final ep = _episodes[_currentEpisodeIndex.clamp(0, _episodes.length - 1)];
@@ -166,6 +237,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
               _controller?.seekTo(currentPos);
               _controller?.setPlaybackSpeed(_playbackSpeed);
               _controller?.play();
+              // Listener auto-next wajib dipasang ulang: controller ini baru.
+              // Tanpa ini, auto-play episode berikutnya mati setelah sekali
+              // ganti kualitas.
+              _controller?.addListener(_checkVideoEnd);
               setState(() {});
 
               _positionTimer = Timer.periodic(
@@ -180,6 +255,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
           })
           .catchError((err) {
             debugPrint('[PlayerScreen] Change quality error: $err');
+            if (mounted) {
+              setState(() {
+                _videoError =
+                    'Video gagal dimuat. Periksa koneksi lalu coba lagi.';
+              });
+            }
           });
   }
 
@@ -199,6 +280,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   @override
   void dispose() {
+    _saveProgress();
     _controlsTimer?.cancel();
     _positionTimer?.cancel();
     _controller?.removeListener(_checkVideoEnd);
@@ -208,6 +290,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   void _selectEpisode(int index) {
     if (index == _currentEpisodeIndex || _episodes.isEmpty) return;
+    _saveProgress();
     setState(() {
       _currentEpisodeIndex = index.clamp(0, _episodes.length - 1);
     });
@@ -395,6 +478,42 @@ class _PlayerScreenState extends State<PlayerScreen> {
     return '$minutes:$seconds';
   }
 
+  Widget _buildErrorPanel() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.cloud_off_rounded,
+              color: AppColors.textMuted,
+              size: 48,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              _videoError ?? 'Gagal memuat daftar episode.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontFamily: 'Urbanist',
+                fontSize: 14,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: _retryVideo,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+              ),
+              child: const Text('Coba Lagi'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isFav = AppSettingsService.instance.isFavorite(widget.drama.id);
@@ -436,6 +555,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   child: VideoPlayer(_controller!),
                 ),
               )
+            else if (_videoError != null || _episodesFailed)
+              _buildErrorPanel()
             else
               const Center(
                 child: CircularProgressIndicator(color: AppColors.primary),
@@ -481,37 +602,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
               ),
             ],
 
-            // 3. SUBTITLE OVERLAY (selalu tampil di layar penuh jika diaktifkan)
-            if (_subtitlesEnabled &&
-                _controller != null &&
-                _controller!.value.isInitialized)
-              Positioned(
-                bottom: _showControls ? 130 : 40,
-                left: 20,
-                right: 20,
-                child: Center(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.75),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      '[$_subtitleLanguage - Sulih Suara Resmi]',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-
-            // 4. TOP APP BAR (ketika kontrol aktif)
+            // 3. TOP APP BAR (ketika kontrol aktif)
             if (_showControls)
               Positioned(
                 top: 0,
@@ -550,7 +641,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                 ),
                               ),
                               Text(
-                                'Episode ${_currentEpisodeIndex + 1} / $totalEps',
+                                totalEps > 0
+                                    ? 'Episode ${_currentEpisodeIndex + 1} / $totalEps'
+                                    : 'Episode ${_currentEpisodeIndex + 1}',
                                 style: const TextStyle(
                                   fontFamily: 'Urbanist',
                                   fontSize: 12,
@@ -560,23 +653,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
                               ),
                             ],
                           ),
-                        ),
-                        // Subtitle Toggle
-                        IconButton(
-                          icon: Icon(
-                            _subtitlesEnabled
-                                ? Icons.closed_caption_rounded
-                                : Icons.closed_caption_off_rounded,
-                            color: _subtitlesEnabled
-                                ? AppColors.primary
-                                : Colors.white60,
-                          ),
-                          onPressed: () {
-                            setState(() {
-                              _subtitlesEnabled = !_subtitlesEnabled;
-                            });
-                            _resetControlsTimer();
-                          },
                         ),
                         // Speed Pill
                         GestureDetector(
@@ -640,7 +716,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 ),
               ),
 
-            // 5. CENTER PLAY/PAUSE (ketika kontrol aktif)
+            // 4. CENTER PLAY/PAUSE (ketika kontrol aktif)
             if (_showControls)
               Center(
                 child: Row(
@@ -686,7 +762,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 ),
               ),
 
-            // 6. BOTTOM CONTROLS & EPISODE DRAWER BUTTON (ketika kontrol aktif)
+            // 5. BOTTOM CONTROLS & EPISODE DRAWER BUTTON (ketika kontrol aktif)
             if (_showControls)
               Positioned(
                 bottom: 0,
@@ -817,7 +893,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                     ),
                                     const SizedBox(width: 6),
                                     Text(
-                                      'Daftar Episode ($totalEps Ep)',
+                                      totalEps > 0
+                                          ? 'Daftar Episode ($totalEps Ep)'
+                                          : 'Daftar Episode',
                                       style: const TextStyle(
                                         fontFamily: 'Urbanist',
                                         fontSize: 13,

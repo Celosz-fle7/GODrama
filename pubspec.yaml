@@ -21,6 +21,12 @@ dependencies:
   path_provider: ^2.1.3
   crypto: ^3.0.3
   url_launcher: ^6.3.0
+  # Dipin ke lini yang kompatibel CI Flutter 3.22 (Dart 3.4).
+  # package_info_plus 5.x gagal resolve: butuh web <0.5.0, sedangkan
+  # cached_network_image_web 1.3.1 butuh web ^1.0.0. Lini 8.x sudah web ^1.0.0.
+  # Jangan naikkan tanpa cek syarat SDK-nya terhadap CI.
+  shared_preferences: '>=2.2.2 <2.3.0'
+  package_info_plus: ^8.0.0
 
 dev_dependencies:
   flutter_test:

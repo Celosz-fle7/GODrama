@@ -19,6 +19,7 @@ class _SearchScreenState extends State<SearchScreen> {
   final TextEditingController _searchController = TextEditingController();
   List<DramaModel> _results = [];
   bool _isSearching = false;
+  bool _isLoadingResults = false;
   List<DramaModel> _trendingDramas = [];
 
   final List<String> _trendingTags = [
@@ -57,12 +58,14 @@ class _SearchScreenState extends State<SearchScreen> {
 
     setState(() {
       _isSearching = true;
+      _isLoadingResults = true;
     });
 
     final remoteResults = await ShortTvService.instance.searchShortTv(query);
     if (mounted && _isSearching && _searchController.text == query) {
       setState(() {
         _results = remoteResults;
+        _isLoadingResults = false;
       });
     }
   }
@@ -277,7 +280,11 @@ class _SearchScreenState extends State<SearchScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '${drama.tags.join(' • ')} • ${drama.viewCount} views',
+                          [
+                            if (drama.tags.isNotEmpty) drama.tags.join(' • '),
+                            if (drama.viewCount.isNotEmpty)
+                              '${drama.viewCount} views',
+                          ].join(' • '),
                           style: const TextStyle(
                             fontFamily: 'Urbanist',
                             fontSize: 11,
@@ -301,6 +308,12 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Widget _buildSearchResults() {
+    // Saat request masih jalan tampilkan loading — bukan "No results found".
+    if (_isLoadingResults) {
+      return const Center(
+        child: CircularProgressIndicator(color: AppColors.primary),
+      );
+    }
     if (_results.isEmpty) {
       return const Center(
         child: Column(

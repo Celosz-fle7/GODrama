@@ -1,7 +1,6 @@
-import 'dart:io';
-
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class UpdateInfo {
@@ -39,8 +38,18 @@ class UpdateService {
   UpdateService._();
   static final UpdateService instance = UpdateService._();
 
-  static const int currentVersionCode = 1;
-  static const String currentVersionName = "1.0.0";
+  // Versi aplikasi dibaca dari PackageInfo (pubspec), BUKAN hardcoded.
+  // Nilai hardcoded dulu (1 / 1.0.0) membuat dialog update muncul selamanya.
+  int _currentVersionCode = 0;
+  String _currentVersionName = '';
+  bool _versionLoaded = false;
+
+  int get currentVersionCode => _currentVersionCode;
+  String get currentVersionName => _currentVersionName;
+  String get currentVersionLabel => _currentVersionCode > 0
+      ? 'v$_currentVersionName ($_currentVersionCode)'
+      : '';
+
   static const String versionCheckUrl =
       "https://raw.githubusercontent.com/Celosz-fle7/GODrama/main/version.json";
 
@@ -53,12 +62,44 @@ class UpdateService {
 
   bool _dialogShowing = false;
 
+  /// Muat versi terpasang sekali, lalu cache. Mengembalikan false bila
+  /// versi tidak bisa dibaca — dalam hal itu perbandingan tidak jujur
+  /// dilakukan, jadi cek update dibatalkan.
+  Future<bool> ensureVersionLoaded() async {
+    if (_versionLoaded) return _currentVersionCode > 0;
+    _versionLoaded = true;
+    try {
+      final info = await PackageInfo.fromPlatform();
+      _currentVersionCode = int.tryParse(info.buildNumber) ?? 0;
+      _currentVersionName = info.version;
+    } catch (_) {
+      _currentVersionCode = 0;
+      _currentVersionName = '';
+    }
+    return _currentVersionCode > 0;
+  }
+
   /// Memeriksa pembaruan aplikasi.
   /// Jika [silent] bernilai true, tidak akan memunculkan dialog/snackbar jika tidak ada pembaruan.
   Future<void> checkForUpdate(
     BuildContext context, {
     bool silent = true,
   }) async {
+    final versionOk = await ensureVersionLoaded();
+    if (!versionOk) {
+      if (!silent && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: Color(0xFF1E232E),
+            content: Text(
+              'Tidak bisa membaca versi aplikasi saat ini.',
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        );
+      }
+      return;
+    }
     try {
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final response = await _dio.get(

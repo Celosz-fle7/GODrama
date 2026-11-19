@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../core/constants/app_colors.dart';
-import '../../data/models/drama_model.dart';
-import '../../data/services/shorttv_service.dart';
 import '../../data/services/app_settings_service.dart';
 import '../player/player_screen.dart';
 
@@ -17,14 +15,11 @@ class MyListScreen extends StatefulWidget {
 class _MyListScreenState extends State<MyListScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  List<DramaModel> _fallbackDramas = [];
-  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    _loadInitialData();
     AppSettingsService.instance.addListener(_onSettingsChanged);
   }
 
@@ -37,19 +32,6 @@ class _MyListScreenState extends State<MyListScreen>
     AppSettingsService.instance.removeListener(_onSettingsChanged);
     _tabController.dispose();
     super.dispose();
-  }
-
-  Future<void> _loadInitialData() async {
-    final live = await ShortTvService.instance.fetchShortTvDramas(
-      page: 1,
-      perPage: 10,
-    );
-    if (mounted) {
-      setState(() {
-        _fallbackDramas = live;
-        _isLoading = false;
-      });
-    }
   }
 
   @override
@@ -75,38 +57,60 @@ class _MyListScreenState extends State<MyListScreen>
           ],
         ),
       ),
-      body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: AppColors.primary),
-            )
-          : TabBarView(
-              controller: _tabController,
-              children: [_buildHistoryList(), _buildFavoritesList()],
+      body: TabBarView(
+        controller: _tabController,
+        children: [_buildHistoryList(), _buildFavoritesList()],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState({required IconData icon, required String text}) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: AppColors.textMuted, size: 48),
+          const SizedBox(height: 12),
+          Text(
+            text,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontFamily: 'Urbanist',
+              fontSize: 14,
+              color: AppColors.textSecondary,
             ),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildHistoryList() {
-    final history = AppSettingsService.instance.watchHistory;
-    final items = history.isNotEmpty
-        ? history
-        : _fallbackDramas.take(3).toList();
+    final entries = AppSettingsService.instance.historyEntries;
 
-    if (items.isEmpty) {
-      return const Center(
-        child: Text(
-          'Belum ada riwayat tontonan',
-          style: TextStyle(color: AppColors.textMuted),
-        ),
+    // Riwayat kosong = tampilkan empty state jujur, bukan drama acak
+    // dari server yang menyamar jadi riwayat.
+    if (entries.isEmpty) {
+      return _buildEmptyState(
+        icon: Icons.history_rounded,
+        text: 'Belum ada riwayat tontonan',
       );
     }
 
     return ListView.builder(
       padding: const EdgeInsets.all(16),
-      itemCount: items.length,
+      itemCount: entries.length,
       itemBuilder: (context, index) {
-        final drama = items[index];
-        final watchedEp = 1;
+        final entry = entries[index];
+        final drama = entry.drama;
+        final progress = entry.progress;
+        final watchedEp = progress.episodeIndex + 1;
+        // Progres nyata: episode yang dicapai + posisi di dalam episode itu.
+        final fraction = drama.totalEpisodes > 0
+            ? ((progress.episodeIndex + progress.episodeFraction) /
+                    drama.totalEpisodes)
+                .clamp(0.05, 1.0)
+            : progress.episodeFraction.clamp(0.05, 1.0);
 
         return GestureDetector(
           onTap: () {
@@ -115,7 +119,7 @@ class _MyListScreenState extends State<MyListScreen>
               MaterialPageRoute(
                 builder: (context) => PlayerScreen(
                   drama: drama,
-                  initialEpisodeIndex: watchedEp - 1,
+                  initialEpisodeIndex: progress.episodeIndex,
                 ),
               ),
             );
@@ -164,7 +168,9 @@ class _MyListScreenState extends State<MyListScreen>
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        'Menonton Ep. $watchedEp / ${drama.totalEpisodes}',
+                        drama.totalEpisodes > 0
+                            ? 'Menonton Ep. $watchedEp / ${drama.totalEpisodes}'
+                            : 'Menonton Ep. $watchedEp',
                         style: const TextStyle(
                           fontFamily: 'Urbanist',
                           fontSize: 12,
@@ -176,10 +182,7 @@ class _MyListScreenState extends State<MyListScreen>
                       ClipRRect(
                         borderRadius: BorderRadius.circular(2),
                         child: LinearProgressIndicator(
-                          value: (watchedEp / drama.totalEpisodes).clamp(
-                            0.05,
-                            1.0,
-                          ),
+                          value: fraction,
                           backgroundColor: AppColors.surfaceLight,
                           valueColor: const AlwaysStoppedAnimation<Color>(
                             AppColors.primary,
@@ -213,13 +216,17 @@ class _MyListScreenState extends State<MyListScreen>
   }
 
   Widget _buildFavoritesList() {
-    final favIds = AppSettingsService.instance.favoriteIds;
-    final favItems = _fallbackDramas
-        .where((d) => favIds.contains(d.id))
-        .toList();
-    final displayItems = favItems.isNotEmpty
-        ? favItems
-        : _fallbackDramas.take(4).toList();
+    // Favorit tersimpan sebagai objek drama lengkap — tampilkan langsung,
+    // bukan dicocokkan ke 10 item feed dan bukan drama acak saat kosong.
+    final displayItems = AppSettingsService.instance.favoriteDramas;
+
+    if (displayItems.isEmpty) {
+      return _buildEmptyState(
+        icon: Icons.favorite_border_rounded,
+        text:
+            'Belum ada drama favorit.\nKetuk ikon hati di video untuk menyimpan.',
+      );
+    }
 
     return GridView.builder(
       padding: const EdgeInsets.all(16),
@@ -232,7 +239,6 @@ class _MyListScreenState extends State<MyListScreen>
       itemCount: displayItems.length,
       itemBuilder: (context, index) {
         final drama = displayItems[index];
-        final isRealFav = AppSettingsService.instance.isFavorite(drama.id);
 
         return GestureDetector(
           onTap: () {
@@ -282,13 +288,9 @@ class _MyListScreenState extends State<MyListScreen>
                               color: Colors.black.withOpacity(0.6),
                               shape: BoxShape.circle,
                             ),
-                            child: Icon(
-                              isRealFav
-                                  ? Icons.favorite_rounded
-                                  : Icons.favorite_border_rounded,
-                              color: isRealFav
-                                  ? const Color(0xFFFF3366)
-                                  : Colors.white,
+                            child: const Icon(
+                              Icons.favorite_rounded,
+                              color: Color(0xFFFF3366),
                               size: 18,
                             ),
                           ),
@@ -316,30 +318,33 @@ class _MyListScreenState extends State<MyListScreen>
                       const SizedBox(height: 4),
                       Row(
                         children: [
-                          const Icon(
-                            Icons.star_rounded,
-                            color: AppColors.gold,
-                            size: 14,
-                          ),
-                          const SizedBox(width: 3),
-                          Text(
-                            '${drama.rating}',
-                            style: const TextStyle(
-                              fontFamily: 'Urbanist',
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
+                          if (drama.rating != null) ...[
+                            const Icon(
+                              Icons.star_rounded,
                               color: AppColors.gold,
+                              size: 14,
                             ),
-                          ),
+                            const SizedBox(width: 3),
+                            Text(
+                              '${drama.rating}',
+                              style: const TextStyle(
+                                fontFamily: 'Urbanist',
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.gold,
+                              ),
+                            ),
+                          ],
                           const Spacer(),
-                          Text(
-                            '${drama.totalEpisodes} Ep',
-                            style: const TextStyle(
-                              fontFamily: 'Urbanist',
-                              fontSize: 11,
-                              color: AppColors.textMuted,
+                          if (drama.totalEpisodes > 0)
+                            Text(
+                              '${drama.totalEpisodes} Ep',
+                              style: const TextStyle(
+                                fontFamily: 'Urbanist',
+                                fontSize: 11,
+                                color: AppColors.textMuted,
+                              ),
                             ),
-                          ),
                         ],
                       ),
                     ],

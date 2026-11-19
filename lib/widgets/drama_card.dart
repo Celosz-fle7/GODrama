@@ -66,57 +66,59 @@ class DramaCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  // Episode badge top-right
-                  Positioned(
-                    top: 6,
-                    right: 6,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.65),
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(
-                          color: Colors.white.withOpacity(0.15),
-                          width: 0.5,
+                  // Episode badge top-right (hanya bila server memberi jumlah)
+                  if (drama.totalEpisodes > 0)
+                    Positioned(
+                      top: 6,
+                      right: 6,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
                         ),
-                      ),
-                      child: Text(
-                        '${drama.totalEpisodes} Eps',
-                        style: const TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.65),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.15),
+                            width: 0.5,
+                          ),
                         ),
-                      ),
-                    ),
-                  ),
-                  // Views count bottom-left
-                  Positioned(
-                    bottom: 6,
-                    left: 6,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.play_arrow_rounded,
-                          color: Colors.white,
-                          size: 14,
-                        ),
-                        const SizedBox(width: 2),
-                        Text(
-                          drama.viewCount,
+                        child: Text(
+                          '${drama.totalEpisodes} Eps',
                           style: const TextStyle(
-                            fontSize: 11,
+                            fontSize: 10,
                             fontWeight: FontWeight.w600,
                             color: Colors.white,
                           ),
                         ),
-                      ],
+                      ),
                     ),
-                  ),
+                  // Views count bottom-left (hanya bila server memberi angka)
+                  if (drama.viewCount.isNotEmpty)
+                    Positioned(
+                      bottom: 6,
+                      left: 6,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.play_arrow_rounded,
+                            color: Colors.white,
+                            size: 14,
+                          ),
+                          const SizedBox(width: 2),
+                          Text(
+                            drama.viewCount,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -133,18 +135,20 @@ class DramaCard extends StatelessWidget {
                 height: 1.2,
               ),
             ),
-            const SizedBox(height: 2),
-            Text(
-              drama.tags.join(' • '),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontFamily: 'Urbanist',
-                fontSize: 11,
-                fontWeight: FontWeight.w500,
-                color: AppColors.textSecondary,
+            if (drama.tags.isNotEmpty) ...[
+              const SizedBox(height: 2),
+              Text(
+                drama.tags.join(' • '),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontFamily: 'Urbanist',
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.textSecondary,
+                ),
               ),
-            ),
+            ],
           ],
         ),
       ),

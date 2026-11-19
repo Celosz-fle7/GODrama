@@ -6,8 +6,10 @@ class DramaModel {
   final String description;
   final List<String> tags;
   final int totalEpisodes;
+  // Kosong bila server tidak memberi angka penonton — jangan diisi angka acak.
   final String viewCount;
-  final double rating;
+  // null bila server tidak memberi rating — jangan diisi angka acak.
+  final double? rating;
   final bool isTrending;
   final List<EpisodeModel> episodes;
 
@@ -22,7 +24,7 @@ class DramaModel {
     required this.tags,
     required this.totalEpisodes,
     required this.viewCount,
-    this.rating = 4.8,
+    this.rating,
     this.isTrending = false,
     this.episodes = const [],
   });
@@ -54,6 +56,39 @@ class DramaModel {
       episodes: episodes ?? this.episodes,
     );
   }
+
+  /// Serialisasi untuk penyimpanan lokal (riwayat/favorit).
+  /// Daftar episode tidak disimpan — URL stream bisa basi, selalu fetch ulang.
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'coverUrl': coverUrl,
+      'bannerUrl': bannerUrl,
+      'description': description,
+      'tags': tags,
+      'totalEpisodes': totalEpisodes,
+      'viewCount': viewCount,
+      'rating': rating,
+      'isTrending': isTrending,
+    };
+  }
+
+  factory DramaModel.fromJson(Map<String, dynamic> json) {
+    return DramaModel(
+      id: json['id']?.toString() ?? '',
+      title: json['title']?.toString() ?? 'Short Drama',
+      coverUrl: json['coverUrl']?.toString() ?? '',
+      bannerUrl: json['bannerUrl']?.toString() ?? '',
+      description: json['description']?.toString() ?? '',
+      tags: (json['tags'] as List?)?.map((t) => t.toString()).toList() ??
+          const [],
+      totalEpisodes: (json['totalEpisodes'] as num?)?.toInt() ?? 0,
+      viewCount: json['viewCount']?.toString() ?? '',
+      rating: (json['rating'] as num?)?.toDouble(),
+      isTrending: json['isTrending'] == true,
+    );
+  }
 }
 
 class EpisodeModel {
@@ -64,7 +99,6 @@ class EpisodeModel {
   final int durationSeconds;
   final bool isUnlocked;
   final Map<String, String> resolutions;
-  final String? subtitleUrl;
 
   const EpisodeModel({
     required this.id,
@@ -74,7 +108,6 @@ class EpisodeModel {
     this.durationSeconds = 90,
     this.isUnlocked = true,
     this.resolutions = const {},
-    this.subtitleUrl,
   });
 
   String getUrlForQuality(String quality) {

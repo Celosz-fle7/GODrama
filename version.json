@@ -1,8 +1,8 @@
 {
-  "version_code": 12,
-  "version_name": "1.0.11",
+  "changelog": "- Perbaikan cek update: versi aplikasi kini dibaca dari paket terpasang, dialog update tidak lagi muncul selamanya\n- Riwayat, favorit, dan pengaturan kini tersimpan dan tidak hilang saat aplikasi ditutup; lanjutkan tontonan dari episode dan posisi terakhir\n- Favorit kini menampilkan drama yang benar-benar disimpan\n- Player dan feed kini menampilkan pesan error dengan tombol coba lagi saat video gagal dimuat\n- Data yang tidak disediakan server tidak lagi diisi angka acak",
+  "download_url": "https://github.com/Celosz-fle7/GODrama/releases/download/v1.0.14/GoDrama-v1.0.14-release.apk",
   "is_force_update": false,
-  "title": "Pembaruan GoDrama v1.0.11!",
-  "changelog": "- Perbaikan Kritis Kueri Pencarian POST: Menetapkan contentLength eksplisit pada payload HTTP Dart agar signature HMAC-MD5 gateway Istio-Envoy 100% valid dan semua tab pencarian terisi penuh\n- 4 Tab Beranda: Untuk Anda (sulih suara), Terbaru (dubbing), Terpanas (versi dub), Peringkat (Global All Gudang Konten)\n- Tab For You: Mix rotasi berselang-seling dari sulih suara dan dubbing",
-  "download_url": "https://github.com/Celosz-fle7/GODrama/releases/download/v1.0.11/GoDrama-v1.0.11-release.apk"
+  "title": "Pembaruan GoDrama v1.0.14!",
+  "version_code": 15,
+  "version_name": "1.0.14"
 }
