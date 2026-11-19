@@ -28,16 +28,22 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _hasMore = false;
   bool _isLoadingMore = false;
 
-  // 4 Tab Beranda Berbasis Multi-Platform & Bahasa:
-  // 1. Sulih Suara ID 🎧: Hub DramaBox & NetShort (classify: 'Indonesian dub')
-  // 2. Lokal Indonesia 🇮🇩: Hub VisionPlus & ReelBuzz (country: 'Indonesia')
-  // 3. Western Drama 🐺: Hub ReelShort & US Drama (country: 'United States')
-  // 4. Asian Drama 👑: Hub GoodShort & ShortMax (country: 'China')
+  // Tab Beranda Berbasis Multi-Platform & Bahasa Resmi:
+  // 1. Sulih Suara 🎧: Hub Drama Dubbing Indonesia dari seluruh platform
+  // 2. DramaBox 🎭: Hub DramaBox Resmi
+  // 3. ShortMax ⚡: Hub ShortMax Resmi
+  // 4. GoodShort 📖: Hub GoodShort Resmi
+  // 5. ReelShort 🐺: Hub ReelShort Resmi
+  // 6. NetShort 🎬: Hub NetShort Resmi
+  // 7. Lokal Indo 🇮🇩: Hub Vision+ & Drama Kreator Indonesia
   final List<CategoryModel> _categories = const [
-    CategoryModel(id: 'sulih_suara', name: 'Sulih Suara ID 🎧'),
-    CategoryModel(id: 'lokal_indo', name: 'Lokal Indonesia 🇮🇩'),
-    CategoryModel(id: 'western', name: 'Western Drama 🐺'),
-    CategoryModel(id: 'asian', name: 'Asian Drama 👑'),
+    CategoryModel(id: 'sulih_suara', name: 'Sulih Suara 🎧'),
+    CategoryModel(id: 'dramabox', name: 'DramaBox 🎭'),
+    CategoryModel(id: 'shortmax', name: 'ShortMax ⚡'),
+    CategoryModel(id: 'goodshort', name: 'GoodShort 📖'),
+    CategoryModel(id: 'reelshort', name: 'ReelShort 🐺'),
+    CategoryModel(id: 'netshort', name: 'NetShort 🎬'),
+    CategoryModel(id: 'lokal_indo', name: 'Lokal Indo 🇮🇩'),
   ];
 
   @override

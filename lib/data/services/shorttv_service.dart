@@ -24,6 +24,20 @@ class ShortTvService {
   static const String _userAgent =
       'com.community.oneroom/50020132 (Linux; U; Android 16; id_ID; Infinix X6870; Build/BP2A.250605.031.A3; Cronet/155.0.8059.16)';
 
+  // Cache identitas platform asli berbasis sidik jari URL CDN streaming
+  static final Map<String, String> _providerCache = {};
+
+  static String? _detectProviderFromUrl(String url) {
+    if (url.contains('/dramabox/')) return 'DramaBox';
+    if (url.contains('/goodshort/')) return 'GoodShort';
+    if (url.contains('/netshort/')) return 'NetShort';
+    if (url.contains('/visionplus')) return 'Vision+';
+    if (url.contains('/reelshort/')) return 'ReelShort';
+    if (url.contains('/resource/') || url.contains('/cms/')) return 'ShortMax';
+    if (url.contains('/dramawave/')) return 'DramaWave';
+    return null;
+  }
+
   // Satu HttpClient bersama untuk semua request (connection reuse /
   // keep-alive), bukan HttpClient baru per request.
   static final HttpClient _httpClient = HttpClient()
@@ -349,14 +363,15 @@ class ShortTvService {
 
   /// Mengambil short drama dari Master Catalog resmi (POST /wefeed-mobile-bff/subject-api/list)
   /// dengan subjectType: 7 (ShortTV / Mini Drama).
-  /// Mendukung filter resmi server: classify (Indonesian dub), country (Indonesia, United States, China),
-  /// dan sorting: 'Hottest', 'Latest', 'Rating'.
+  /// Mendukung filter resmi server: classify (dramabox, shortmax, goodshort, reelshort, netshort, Indonesian dub),
+  /// country (Indonesia), dan sorting: 'Hottest', 'Latest', 'Rating'.
   Future<List<DramaModel>> fetchShortTvCatalog({
     String? classify,
     String? country,
     String sort = 'Hottest',
     int page = 1,
     int perPage = 15,
+    String? defaultProviderBadge,
   }) async {
     if (page < 1) return [];
     final body = <String, dynamic>{
@@ -385,7 +400,7 @@ class ShortTvService {
       if (items != null && items.isNotEmpty) {
         return items
             .whereType<Map<String, dynamic>>()
-            .map(_mapToDramaModel)
+            .map((it) => _mapToDramaModel(it, defaultBadge: defaultProviderBadge))
             .where((d) => d.id.isNotEmpty)
             .toList();
       }
@@ -406,6 +421,7 @@ class ShortTvService {
       sort: sort,
       page: page,
       perPage: perPage,
+      defaultProviderBadge: 'Sulih Suara',
     );
   }
 
@@ -466,11 +482,14 @@ class ShortTvService {
     return sectionsMap;
   }
 
-  /// Katalog drama Beranda per halaman, untuk 4 tab provider/bahasa:
-  /// 1. 'sulih_suara': Sulih Suara ID (DramaBox & NetShort Hub) -> classify: 'Indonesian dub'
-  /// 2. 'lokal_indo': Lokal Indonesia (VisionPlus & ReelBuzz Hub) -> country: 'Indonesia'
-  /// 3. 'western': Western Drama (ReelShort Hub) -> country: 'United States'
-  /// 4. 'asian': Asian Drama (GoodShort & ShortMax Hub) -> country: 'China'
+  /// Katalog drama Beranda per halaman, terkelompokkan sesuai provider asli resmi:
+  /// 1. 'sulih_suara': Sulih Suara ID (Hub Dubbing Indonesia dari seluruh platform)
+  /// 2. 'dramabox': Hub DramaBox resmi
+  /// 3. 'shortmax': Hub ShortMax resmi
+  /// 4. 'goodshort': Hub GoodShort resmi
+  /// 5. 'reelshort': Hub ReelShort resmi
+  /// 6. 'netshort': Hub NetShort resmi
+  /// 7. 'lokal_indo': Hub Konten Lokal Indonesia (Vision+, dll)
   Future<List<DramaModel>> getBerandaDramasPage({
     required String tab,
     required int page,
@@ -487,6 +506,49 @@ class ShortTvService {
           sort: sort,
           page: page,
           perPage: 15,
+          defaultProviderBadge: 'Sulih Suara',
+        );
+      case 'dramabox':
+        return await fetchShortTvCatalog(
+          classify: 'dramabox',
+          sort: sort,
+          page: page,
+          perPage: 15,
+          defaultProviderBadge: 'DramaBox',
+        );
+      case 'shortmax':
+        return await fetchShortTvCatalog(
+          classify: 'shortmax',
+          sort: sort,
+          page: page,
+          perPage: 15,
+          defaultProviderBadge: 'ShortMax',
+        );
+      case 'goodshort':
+        return await fetchShortTvCatalog(
+          classify: 'goodshort',
+          sort: sort,
+          page: page,
+          perPage: 15,
+          defaultProviderBadge: 'GoodShort',
+        );
+      case 'reelshort':
+      case 'western':
+      case 'terpanas':
+        return await fetchShortTvCatalog(
+          classify: 'reelshort',
+          sort: sort,
+          page: page,
+          perPage: 15,
+          defaultProviderBadge: 'ReelShort',
+        );
+      case 'netshort':
+        return await fetchShortTvCatalog(
+          classify: 'netshort',
+          sort: sort,
+          page: page,
+          perPage: 15,
+          defaultProviderBadge: 'NetShort',
         );
       case 'lokal_indo':
       case 'terbaru':
@@ -495,22 +557,16 @@ class ShortTvService {
           sort: sort,
           page: page,
           perPage: 15,
-        );
-      case 'western':
-      case 'terpanas':
-        return await fetchShortTvCatalog(
-          country: 'United States',
-          sort: sort,
-          page: page,
-          perPage: 15,
+          defaultProviderBadge: 'Vision+',
         );
       case 'asian':
       case 'peringkat':
         return await fetchShortTvCatalog(
-          country: 'China',
+          classify: 'shortmax',
           sort: sort,
           page: page,
           perPage: 15,
+          defaultProviderBadge: 'ShortMax',
         );
       default:
         return await fetchShortTvCatalog(
@@ -518,6 +574,7 @@ class ShortTvService {
           sort: sort,
           page: page,
           perPage: 15,
+          defaultProviderBadge: 'Sulih Suara',
         );
     }
   }
@@ -590,6 +647,14 @@ class ShortTvService {
               final vidObj = it['video'] as Map<String, dynamic>?;
               final addrObj = vidObj?['videoAddress'] as Map<String, dynamic>?;
               final streamUrl = addrObj?['url']?.toString() ?? '';
+
+              // Catat sidik jari CDN otentik ke cache provider
+              if (streamUrl.isNotEmpty) {
+                final detected = _detectProviderFromUrl(streamUrl);
+                if (detected != null) {
+                  _providerCache[subjectId] = detected;
+                }
+              }
 
               // Ekstraksi seluruh pilihan resolusi (1080p, 720p, 480p)
               final resMap = <String, String>{};
@@ -669,7 +734,10 @@ class ShortTvService {
     return '';
   }
 
-  DramaModel _mapToDramaModel(Map<String, dynamic> json) {
+  DramaModel _mapToDramaModel(
+    Map<String, dynamic> json, {
+    String? defaultBadge,
+  }) {
     final subjectId =
         json['subjectId']?.toString() ??
         json['id']?.toString() ??
@@ -691,13 +759,36 @@ class ShortTvService {
         (json['episodeCount'] as num?)?.toInt() ??
         0;
 
+    // Tags bersih dari metadata server
     final tags = <String>[];
-    if (json['genre'] != null) tags.add(json['genre'].toString());
-    if (json['classify'] != null) tags.add(json['classify'].toString());
+    if (json['tags'] is List) {
+      for (final t in json['tags'] as List) {
+        final str = t.toString().trim();
+        if (str.isNotEmpty && !tags.contains(str)) {
+          tags.add(str);
+        }
+      }
+    }
+    if (json['genre'] != null) {
+      final genreStr = json['genre'].toString();
+      for (final g in genreStr.split(',')) {
+        final clean = g.trim();
+        if (clean.isNotEmpty &&
+            clean.toLowerCase() != 'modern drama' &&
+            !tags.contains(clean)) {
+          tags.add(clean);
+        }
+      }
+    }
+    if (tags.isEmpty && json['genre'] != null) {
+      final g = json['genre'].toString().trim();
+      if (g.isNotEmpty) tags.add(g);
+    }
 
     // Tanpa angka penonton dari server, kosongkan — jangan acak.
     final viewCountNum = (json['viewCount'] as num?)?.toInt() ??
-        (json['playCount'] as num?)?.toInt();
+        (json['playCount'] as num?)?.toInt() ??
+        (json['viewers'] as num?)?.toInt();
     final viewCountStr = viewCountNum == null
         ? ''
         : viewCountNum > 1000
@@ -710,19 +801,39 @@ class ShortTvService {
     final rating = (json['rating'] as num?)?.toDouble() ??
         (rawImdb != null ? rawImdb / 2.0 : null);
 
-    // Deteksi provider badge berdasarkan metadata otentik server
-    String? badge;
-    final country = json['countryName']?.toString() ?? json['country']?.toString();
-    final classify = json['classify']?.toString() ?? '';
-    if (country == 'Indonesia') {
-      badge = 'Vision+';
-    } else if (classify.toLowerCase().contains('indonesian') ||
-        classify.toLowerCase().contains('dub')) {
-      badge = 'DramaBox';
-    } else if (country == 'United States') {
-      badge = 'ReelShort';
-    } else if (country == 'China') {
-      badge = 'GoodShort';
+    // Deteksi provider badge yang jujur & akurat:
+    // 1. Cek cache biner CDN otentik yang pernah ter-fetch
+    // 2. Default badge dari tab resmi yang sedang di-request (DramaBox, ShortMax, dll)
+    // 3. Pola judul otentik dari server
+    // 4. Negara asal (Vision+ untuk Indonesia)
+    String? badge = _providerCache[subjectId] ?? defaultBadge;
+    if (badge == null || badge.isEmpty) {
+      final titleLower = title.toLowerCase();
+      if (title.contains('(Sulih suara)')) {
+        badge = 'NetShort';
+      } else if (title.contains('(Sulih Suara)')) {
+        badge = 'DramaBox';
+      } else if (title.contains('[Sulih Suara]')) {
+        badge = 'ShortMax';
+      } else if (title.contains('[Versi Dub]')) {
+        badge = 'ReelShort';
+      } else if (title.endsWith('[Indonesian]')) {
+        badge = 'ReelShort';
+      } else if (titleLower.contains('dramabox')) {
+        badge = 'DramaBox';
+      } else if (titleLower.contains('shortmax')) {
+        badge = 'ShortMax';
+      } else if (titleLower.contains('goodshort')) {
+        badge = 'GoodShort';
+      } else if (titleLower.contains('reelshort')) {
+        badge = 'ReelShort';
+      } else {
+        final country =
+            json['countryName']?.toString() ?? json['country']?.toString();
+        if (country == 'Indonesia') {
+          badge = 'Vision+';
+        }
+      }
     }
 
     return DramaModel(

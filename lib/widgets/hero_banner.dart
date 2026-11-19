@@ -71,6 +71,44 @@ class _HeroBannerState extends State<HeroBanner> {
                           ),
                         ),
                       ),
+                      // Provider badge top-left
+                      if (drama.providerBadge != null &&
+                          drama.providerBadge!.isNotEmpty)
+                        Positioned(
+                          top: 12,
+                          left: 12,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _getBadgeColor(drama.providerBadge!),
+                              borderRadius: BorderRadius.circular(6),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.4),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 1),
+                                ),
+                              ],
+                              border: Border.all(
+                                color: Colors.white.withOpacity(0.25),
+                                width: 0.5,
+                              ),
+                            ),
+                            child: Text(
+                              drama.providerBadge!,
+                              style: const TextStyle(
+                                fontFamily: 'Urbanist',
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                                letterSpacing: 0.3,
+                              ),
+                            ),
+                          ),
+                        ),
                       // Bottom text info
                       Positioned(
                         left: 16,
@@ -214,5 +252,26 @@ class _HeroBannerState extends State<HeroBanner> {
         ),
       ],
     );
+  }
+
+  Color _getBadgeColor(String badge) {
+    switch (badge.toLowerCase()) {
+      case 'dramabox':
+        return const Color(0xFFE50914);
+      case 'shortmax':
+        return const Color(0xFFFF8C00);
+      case 'goodshort':
+        return const Color(0xFF007AFF);
+      case 'reelshort':
+        return const Color(0xFF8A2BE2);
+      case 'netshort':
+        return const Color(0xFF00B0FF);
+      case 'vision+':
+        return const Color(0xFF0A84FF);
+      case 'sulih suara':
+        return const Color(0xFF7B1FA2);
+      default:
+        return AppColors.primary;
+    }
   }
 }

@@ -77,10 +77,17 @@ class DramaCard extends StatelessWidget {
                           vertical: 2,
                         ),
                         decoration: BoxDecoration(
-                          color: AppColors.primary.withOpacity(0.85),
+                          color: _getBadgeColor(drama.providerBadge!),
                           borderRadius: BorderRadius.circular(4),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.35),
+                              blurRadius: 4,
+                              offset: const Offset(0, 1),
+                            ),
+                          ],
                           border: Border.all(
-                            color: Colors.white.withOpacity(0.2),
+                            color: Colors.white.withOpacity(0.25),
                             width: 0.5,
                           ),
                         ),
@@ -90,6 +97,7 @@ class DramaCard extends StatelessWidget {
                             fontSize: 9,
                             fontWeight: FontWeight.w700,
                             color: Colors.white,
+                            letterSpacing: 0.2,
                           ),
                         ),
                       ),
@@ -181,5 +189,26 @@ class DramaCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Color _getBadgeColor(String badge) {
+    switch (badge.toLowerCase()) {
+      case 'dramabox':
+        return const Color(0xFFE50914);
+      case 'shortmax':
+        return const Color(0xFFFF8C00);
+      case 'goodshort':
+        return const Color(0xFF007AFF);
+      case 'reelshort':
+        return const Color(0xFF8A2BE2);
+      case 'netshort':
+        return const Color(0xFF00B0FF);
+      case 'vision+':
+        return const Color(0xFF0A84FF);
+      case 'sulih suara':
+        return const Color(0xFF7B1FA2);
+      default:
+        return AppColors.primary;
+    }
   }
 }
