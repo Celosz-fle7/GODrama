@@ -162,8 +162,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
             if (mounted) {
               // Resume posisi tersimpan bila episode ini yang terakhir ditonton.
               // Posisi di 5 detik terakhir dianggap sudah tamat: mulai dari 0.
-              final saved = AppSettingsService.instance
-                  .progressFor(widget.drama.id);
+              final saved = AppSettingsService.instance.progressFor(
+                widget.drama.id,
+              );
               final duration = _controller!.value.duration;
               final shouldResume =
                   saved != null &&
@@ -172,9 +173,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   duration > Duration.zero &&
                   saved.positionSeconds < duration.inSeconds - 5;
               if (shouldResume) {
-                _controller?.seekTo(
-                  Duration(seconds: saved.positionSeconds),
-                );
+                _controller?.seekTo(Duration(seconds: saved.positionSeconds));
               }
               _controller?.setPlaybackSpeed(_playbackSpeed);
               _controller?.play();
@@ -408,6 +407,18 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _resetControlsTimer();
   }
 
+  void _downloadCurrentEpisode() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Mengunduh EP.${_currentEpisodeIndex + 1} "${widget.drama.title}"...',
+        ),
+        backgroundColor: AppColors.surface,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
   void _openEpisodeDrawer() {
     final totalEps = _episodes.isNotEmpty
         ? _episodes.length
@@ -435,10 +446,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
       ),
       builder: (context) {
         // Hanya resolusi yang benar-benar punya URL untuk episode ini.
-        final ep = _episodes[_currentEpisodeIndex.clamp(
-          0,
-          _episodes.length - 1,
-        )];
+        final ep =
+            _episodes[_currentEpisodeIndex.clamp(0, _episodes.length - 1)];
         final offered = ep.availableQualities;
         final qualities = offered.isNotEmpty ? offered : [_selectedQuality];
         return SafeArea(
@@ -468,10 +477,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     q == '1080p'
                         ? '$q (Full HD)'
                         : q == '720p'
-                            ? '$q (HD)'
-                            : q == '480p'
-                                ? '$q (Hemat Kuota)'
-                                : q,
+                        ? '$q (HD)'
+                        : q == '480p'
+                        ? '$q (Hemat Kuota)'
+                        : q,
                     style: TextStyle(
                       fontFamily: 'Urbanist',
                       color: isSel ? AppColors.primary : Colors.white,
@@ -479,7 +488,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     ),
                   ),
                   trailing: isSel
-                      ? const Icon(Icons.check_rounded, color: AppColors.primary)
+                      ? const Icon(
+                          Icons.check_rounded,
+                          color: AppColors.primary,
+                        )
                       : null,
                   onTap: () {
                     Navigator.pop(context);
@@ -531,7 +543,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     ),
                   ),
                   trailing: isSel
-                      ? const Icon(Icons.check_rounded, color: AppColors.primary)
+                      ? const Icon(
+                          Icons.check_rounded,
+                          color: AppColors.primary,
+                        )
                       : null,
                   onTap: () {
                     Navigator.pop(context);
@@ -676,7 +691,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
               ),
             ],
 
-            // 3. TOP APP BAR (ketika kontrol aktif)
+            // 3. TOP APP BAR: < EP.1 dan tombol Kecepatan
             if (_showControls)
               Positioned(
                 top: 0,
@@ -698,48 +713,41 @@ class _PlayerScreenState extends State<PlayerScreen> {
                           ),
                           onPressed: () => Navigator.pop(context),
                         ),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                widget.drama.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontFamily: 'Urbanist',
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.white,
-                                ),
-                              ),
-                              Text(
-                                totalEps > 0
-                                    ? 'Episode ${_currentEpisodeIndex + 1} / $totalEps'
-                                    : 'Episode ${_currentEpisodeIndex + 1}',
-                                style: const TextStyle(
-                                  fontFamily: 'Urbanist',
-                                  fontSize: 12,
-                                  color: AppColors.primary,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
+                        Text(
+                          'EP.${_currentEpisodeIndex + 1}',
+                          style: const TextStyle(
+                            fontFamily: 'Urbanist',
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
                           ),
                         ),
-                        // Speed Pill
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            widget.drama.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontFamily: 'Urbanist',
+                              fontSize: 13,
+                              color: Colors.white.withOpacity(0.7),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                        // Tombol Kecepatan
                         GestureDetector(
                           onTap: _showSpeedPicker,
                           child: Container(
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
+                              horizontal: 10,
                               vertical: 4,
                             ),
                             margin: const EdgeInsets.symmetric(horizontal: 4),
                             decoration: BoxDecoration(
                               color: Colors.white12,
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(14),
                               border: Border.all(
                                 color: Colors.white24,
                                 width: 0.8,
@@ -749,14 +757,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
                               '${_playbackSpeed}x',
                               style: const TextStyle(
                                 fontFamily: 'Urbanist',
-                                fontSize: 11,
+                                fontSize: 12,
                                 fontWeight: FontWeight.w700,
                                 color: Colors.white,
                               ),
                             ),
                           ),
                         ),
-                        // Quality Pill
+                        // Tombol Kualitas Resolusi
                         GestureDetector(
                           onTap: _showQualityPicker,
                           child: Container(
@@ -764,10 +772,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
                               horizontal: 8,
                               vertical: 4,
                             ),
-                            margin: const EdgeInsets.only(left: 4, right: 6),
+                            margin: const EdgeInsets.only(left: 4, right: 8),
                             decoration: BoxDecoration(
-                              color: AppColors.primary.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(12),
+                              color: AppColors.primary.withOpacity(0.25),
+                              borderRadius: BorderRadius.circular(14),
                               border: Border.all(
                                 color: AppColors.primary,
                                 width: 1,
@@ -836,7 +844,46 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 ),
               ),
 
-            // 5. BOTTOM CONTROLS & EPISODE DRAWER BUTTON (ketika kontrol aktif)
+            // 5. RIGHT ACTION: IKON EPISODE (ketika kontrol aktif)
+            if (_showControls)
+              Positioned(
+                right: 14,
+                bottom: 105,
+                child: GestureDetector(
+                  onTap: _openEpisodeDrawer,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.55),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white24, width: 0.8),
+                        ),
+                        child: const Icon(
+                          Icons.playlist_play_rounded,
+                          color: Colors.white,
+                          size: 26,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      const Text(
+                        'Episode',
+                        style: TextStyle(
+                          fontFamily: 'Urbanist',
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+            // 6. FOOTER BAWAH: Sinopsis 1 Baris, Progress Bar & Tombol Unduh (ketika kontrol aktif)
             if (_showControls)
               Positioned(
                 bottom: 0,
@@ -844,11 +891,31 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 right: 0,
                 child: SafeArea(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Scrubber & Duration Row
+                        // Sinopsis 1 Baris
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          child: Text(
+                            widget.drama.description.isNotEmpty
+                                ? widget.drama.description
+                                : widget.drama.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontFamily: 'Urbanist',
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.white.withOpacity(0.85),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+
+                        // Progress Bar & Duration Row
                         Row(
                           children: [
                             Text(
@@ -878,26 +945,35 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                   value: _isDraggingScrubber
                                       ? _scrubberValue
                                       : (_controller != null &&
-                                              _controller!.value.isInitialized)
-                                          ? _controller!.value.position
-                                              .inMilliseconds
-                                              .toDouble()
-                                              .clamp(
-                                                0.0,
-                                                _controller!.value.duration
-                                                    .inMilliseconds
-                                                    .toDouble(),
-                                              )
-                                          : 0.0,
+                                            _controller!.value.isInitialized)
+                                      ? _controller!
+                                            .value
+                                            .position
+                                            .inMilliseconds
+                                            .toDouble()
+                                            .clamp(
+                                              0.0,
+                                              _controller!
+                                                  .value
+                                                  .duration
+                                                  .inMilliseconds
+                                                  .toDouble(),
+                                            )
+                                      : 0.0,
                                   min: 0.0,
-                                  max: (_controller != null &&
+                                  max:
+                                      (_controller != null &&
                                           _controller!.value.isInitialized &&
-                                          _controller!.value.duration
+                                          _controller!
+                                                  .value
+                                                  .duration
                                                   .inMilliseconds >
                                               0)
-                                      ? _controller!.value.duration
-                                          .inMilliseconds
-                                          .toDouble()
+                                      ? _controller!
+                                            .value
+                                            .duration
+                                            .inMilliseconds
+                                            .toDouble()
                                       : 1.0,
                                   onChangeStart: (val) {
                                     setState(() {
@@ -936,22 +1012,23 @@ class _PlayerScreenState extends State<PlayerScreen> {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 6),
 
-                        // Action Row: Daftar Episode Button & Favorite
+                        // Tombol Unduh & Favorit
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
+                            // Tombol Unduh
                             GestureDetector(
-                              onTap: _openEpisodeDrawer,
+                              onTap: _downloadCurrentEpisode,
                               child: Container(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 14,
-                                  vertical: 8,
+                                  vertical: 7,
                                 ),
                                 decoration: BoxDecoration(
                                   color: AppColors.surface,
-                                  borderRadius: BorderRadius.circular(20),
+                                  borderRadius: BorderRadius.circular(18),
                                   border: Border.all(
                                     color: AppColors.divider,
                                     width: 0.8,
@@ -961,27 +1038,19 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     const Icon(
-                                      Icons.playlist_play_rounded,
+                                      Icons.download_rounded,
                                       color: AppColors.primary,
-                                      size: 20,
+                                      size: 18,
                                     ),
                                     const SizedBox(width: 6),
                                     Text(
-                                      totalEps > 0
-                                          ? 'Daftar Episode ($totalEps Ep)'
-                                          : 'Daftar Episode',
+                                      'Unduh EP.${_currentEpisodeIndex + 1}',
                                       style: const TextStyle(
                                         fontFamily: 'Urbanist',
-                                        fontSize: 13,
+                                        fontSize: 12,
                                         fontWeight: FontWeight.w700,
                                         color: Colors.white,
                                       ),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    const Icon(
-                                      Icons.keyboard_arrow_up_rounded,
-                                      color: Colors.white60,
-                                      size: 18,
                                     ),
                                   ],
                                 ),
@@ -998,8 +1067,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
                               ),
                               onPressed: () {
                                 setState(() {
-                                  AppSettingsService.instance
-                                      .toggleFavorite(widget.drama);
+                                  AppSettingsService.instance.toggleFavorite(
+                                    widget.drama,
+                                  );
                                 });
                               },
                             ),

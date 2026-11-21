@@ -252,6 +252,7 @@ class _ReelItemState extends State<_ReelItem> {
   final double _playbackSpeed = 1.0;
   bool _clearViewMode = false;
   bool _videoError = false;
+  bool _isSynopsisExpanded = false;
 
   // Scrubber State
   bool _isDraggingScrubber = false;
@@ -441,6 +442,131 @@ class _ReelItemState extends State<_ReelItem> {
     }
   }
 
+  void _showCommentsSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1B1E26),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white24,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Diskusi & Komentar (385)',
+                      style: TextStyle(
+                        fontFamily: 'Urbanist',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        color: Colors.white70,
+                      ),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: CircleAvatar(
+                    backgroundColor: AppColors.primary.withOpacity(0.2),
+                    child: const Text(
+                      'R',
+                      style: TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  title: const Text(
+                    'Rian Pratama',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  subtitle: const Text(
+                    'Alur ceritanya seru banget, plot twist di ep 10 di luar dugaan!',
+                    style: TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+                  trailing: const Text(
+                    '1j lalu',
+                    style: TextStyle(color: Colors.white38, fontSize: 11),
+                  ),
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: CircleAvatar(
+                    backgroundColor: Colors.purple.withOpacity(0.2),
+                    child: const Text(
+                      'S',
+                      style: TextStyle(
+                        color: Colors.purpleAccent,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  title: const Text(
+                    'Siti Aisyah',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  subtitle: const Text(
+                    'Dubbing Indonesianya rapi dan jernih, lanjut nonton!',
+                    style: TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+                  trailing: const Text(
+                    '3j lalu',
+                    style: TextStyle(color: Colors.white38, fontSize: 11),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _shareDrama() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Tautan "${widget.drama.title}" berhasil disalin!'),
+        backgroundColor: AppColors.surface,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isFav = AppSettingsService.instance.isFavorite(widget.drama.id);
@@ -578,71 +704,16 @@ class _ReelItemState extends State<_ReelItem> {
               ),
             ),
 
-          // Bottom Left: Info Drama & Tombol Utama "Tonton Semua Episode"
+          // Bottom Left: Judul, Horizontal Genre Chips, Sinopsis Expandable & Tombol Lebar 'Tonton Lengkap'
           Positioned(
             left: 16,
-            right: 84,
-            bottom: 24,
+            right: 80,
+            bottom: 22,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                // TOMBOL UTAMA: "Tonton Semua Episode" (Kunci pengalaman pengguna)
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => _openFullPlayer(0),
-                  child: Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFFFF3366), Color(0xFFFF5E3A)],
-                      ),
-                      borderRadius: BorderRadius.circular(24),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFFFF3366).withOpacity(0.4),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.play_arrow_rounded,
-                          color: Colors.white,
-                          size: 20,
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          totalEps > 0
-                              ? 'Tonton Semua Episode ($totalEps Ep)'
-                              : 'Tonton Semua Episode',
-                          style: const TextStyle(
-                            fontFamily: 'Urbanist',
-                            fontSize: 13,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.white,
-                            letterSpacing: 0.3,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        const Icon(
-                          Icons.chevron_right_rounded,
-                          color: Colors.white70,
-                          size: 18,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                // Title
+                // 1. Judul Drama
                 Text(
                   widget.drama.title,
                   maxLines: 1,
@@ -655,32 +726,143 @@ class _ReelItemState extends State<_ReelItem> {
                     letterSpacing: 0.2,
                   ),
                 ),
-                const SizedBox(height: 6),
-                // Description
-                Text(
-                  widget.drama.description,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontFamily: 'Urbanist',
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: Color(0xCCFFFFFF),
-                    height: 1.3,
+                const SizedBox(height: 4),
+
+                // 2. Horizontal Genre Chips
+                if (widget.drama.tags.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: SizedBox(
+                      height: 24,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: widget.drama.tags.length,
+                        separatorBuilder: (_, __) => const SizedBox(width: 6),
+                        itemBuilder: (context, i) {
+                          return Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: Colors.white24,
+                                width: 0.5,
+                              ),
+                            ),
+                            child: Center(
+                              child: Text(
+                                widget.drama.tags[i],
+                                style: const TextStyle(
+                                  fontFamily: 'Urbanist',
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+
+                // 3. Sinopsis 2 Baris Expandable (EP.1 | ... Lebih banyak)
+                GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _isSynopsisExpanded = !_isSynopsisExpanded;
+                    });
+                  },
+                  child: RichText(
+                    maxLines: _isSynopsisExpanded ? 6 : 2,
+                    overflow: TextOverflow.ellipsis,
+                    text: TextSpan(
+                      style: const TextStyle(
+                        fontFamily: 'Urbanist',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xDDFFFFFF),
+                        height: 1.35,
+                      ),
+                      children: [
+                        const TextSpan(
+                          text: 'EP.1 | ',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                        TextSpan(
+                          text: widget.drama.description.isNotEmpty
+                              ? widget.drama.description
+                              : 'Saksikan kisah seru drama pendek berkualitas dalam tayangan lengkap di GoDrama.',
+                        ),
+                        TextSpan(
+                          text: _isSynopsisExpanded
+                              ? ' (Tutup)'
+                              : ' ...Lebih banyak',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white70,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+
+                // 4. Tombol Lebar "Tonton Lengkap"
+                SizedBox(
+                  width: double.infinity,
+                  height: 42,
+                  child: ElevatedButton(
+                    onPressed: () => _openFullPlayer(0),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      elevation: 4,
+                      shadowColor: AppColors.primary.withOpacity(0.4),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(22),
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.play_arrow_rounded, size: 22),
+                        SizedBox(width: 6),
+                        Text(
+                          'Tonton Lengkap',
+                          style: TextStyle(
+                            fontFamily: 'Urbanist',
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                        SizedBox(width: 4),
+                        Icon(Icons.arrow_forward_ios_rounded, size: 12),
+                      ],
+                    ),
                   ),
                 ),
               ],
             ),
           ),
 
-          // Right Action Bar: Suka saja di mode cuplikan (episode, opsi & player disembunyikan sampai klik tonton)
+          // Sisi Kanan: Cukup 3 Ikon (Bookmark, Komentar, Bagikan)
           Positioned(
             right: 12,
-            bottom: 30,
+            bottom: 60,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // 1. Suka / Like
+                // 1. Bookmark / Simpan
                 GestureDetector(
                   onTap: () {
                     AppSettingsService.instance.toggleFavorite(widget.drama);
@@ -689,12 +871,40 @@ class _ReelItemState extends State<_ReelItem> {
                   child: _buildActionItem(
                     icon: Icon(
                       isFav
-                          ? Icons.favorite_rounded
-                          : Icons.favorite_border_rounded,
-                      color: isFav ? const Color(0xFFFF3366) : Colors.white,
-                      size: 28,
+                          ? Icons.bookmark_rounded
+                          : Icons.bookmark_border_rounded,
+                      color: isFav ? AppColors.primary : Colors.white,
+                      size: 26,
                     ),
-                    label: isFav ? 'Disukai' : 'Suka',
+                    label: isFav ? 'Tersimpan' : 'Bookmark',
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // 2. Komentar
+                GestureDetector(
+                  onTap: _showCommentsSheet,
+                  child: _buildActionItem(
+                    icon: const Icon(
+                      Icons.chat_bubble_outline_rounded,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+                    label: 'Komentar',
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // 3. Bagikan
+                GestureDetector(
+                  onTap: _shareDrama,
+                  child: _buildActionItem(
+                    icon: const Icon(
+                      Icons.share_rounded,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+                    label: 'Bagikan',
                   ),
                 ),
               ],

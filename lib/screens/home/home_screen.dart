@@ -213,74 +213,66 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
-              // Hero Banner Carousel
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 4, bottom: 16),
-                  child: HeroBanner(
-                    dramas: featured,
-                    onDramaTap: (drama) => _openPlayer(drama),
-                  ),
-                ),
-              ),
-
               // Category Tabs (Horizontal Scroll)
               SliverToBoxAdapter(
-                child: SizedBox(
-                  height: 38,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: _categories.length,
-                    itemBuilder: (context, index) {
-                      final category = _categories[index];
-                      final isSelected = category.id == _selectedCategoryId;
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 4, bottom: 4),
+                  child: SizedBox(
+                    height: 38,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      itemCount: _categories.length,
+                      itemBuilder: (context, index) {
+                        final category = _categories[index];
+                        final isSelected = category.id == _selectedCategoryId;
 
-                      return GestureDetector(
-                        onTap: () {
-                          if (_selectedCategoryId != category.id) {
-                            setState(() {
-                              _selectedCategoryId = category.id;
-                            });
-                            _loadDramas();
-                          }
-                        },
-                        child: Container(
-                          margin: const EdgeInsets.only(right: 8),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: isSelected
-                                ? AppColors.primary
-                                : AppColors.surface,
-                            borderRadius: BorderRadius.circular(18),
-                            border: Border.all(
+                        return GestureDetector(
+                          onTap: () {
+                            if (_selectedCategoryId != category.id) {
+                              setState(() {
+                                _selectedCategoryId = category.id;
+                              });
+                              _loadDramas();
+                            }
+                          },
+                          child: Container(
+                            margin: const EdgeInsets.only(right: 8),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
                               color: isSelected
                                   ? AppColors.primary
-                                  : AppColors.divider,
-                              width: 0.8,
-                            ),
-                          ),
-                          child: Center(
-                            child: Text(
-                              category.name,
-                              style: TextStyle(
-                                fontFamily: 'Urbanist',
-                                fontSize: 13,
-                                fontWeight: isSelected
-                                    ? FontWeight.w700
-                                    : FontWeight.w500,
+                                  : AppColors.surface,
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(
                                 color: isSelected
-                                    ? Colors.white
-                                    : AppColors.textSecondary,
+                                    ? AppColors.primary
+                                    : AppColors.divider,
+                                width: 0.8,
+                              ),
+                            ),
+                            child: Center(
+                              child: Text(
+                                category.name,
+                                style: TextStyle(
+                                  fontFamily: 'Urbanist',
+                                  fontSize: 13,
+                                  fontWeight: isSelected
+                                      ? FontWeight.w700
+                                      : FontWeight.w500,
+                                  color: isSelected
+                                      ? Colors.white
+                                      : AppColors.textSecondary,
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                      );
-                    },
+                        );
+                      },
+                    ),
                   ),
                 ),
               ),
@@ -368,10 +360,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   sliver: SliverGrid(
                     gridDelegate:
                         const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          crossAxisSpacing: 12,
-                          mainAxisSpacing: 16,
-                          childAspectRatio: 0.58,
+                          crossAxisCount: 3,
+                          crossAxisSpacing: 10,
+                          mainAxisSpacing: 14,
+                          childAspectRatio: 0.52,
                         ),
                     delegate: SliverChildBuilderDelegate((context, index) {
                       final drama = dramas[index];
@@ -382,6 +374,69 @@ class _HomeScreenState extends State<HomeScreen> {
                     }, childCount: dramas.length),
                   ),
                 ),
+
+              // Section Horizontal 'Akan Tayang' di Bawah Grid
+              if (dramas.length >= 6) ...[
+                const SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(16, 24, 16, 12),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.schedule_rounded,
+                              size: 18,
+                              color: AppColors.primary,
+                            ),
+                            SizedBox(width: 6),
+                            Text(
+                              'Akan Tayang',
+                              style: TextStyle(
+                                fontFamily: 'Urbanist',
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                          ],
+                        ),
+                        Text(
+                          'Segera Rilis',
+                          style: TextStyle(
+                            fontFamily: 'Urbanist',
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                SliverToBoxAdapter(
+                  child: SizedBox(
+                    height: 195,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      itemCount: (dramas.length ~/ 2).clamp(4, 10),
+                      itemBuilder: (context, idx) {
+                        final drama = dramas[dramas.length - 1 - idx];
+                        return Container(
+                          width: 105,
+                          margin: const EdgeInsets.only(right: 10),
+                          child: DramaCard(
+                            drama: drama,
+                            onTap: () => _openPlayer(drama),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ],
 
               if (_isLoadingMore)
                 const SliverToBoxAdapter(

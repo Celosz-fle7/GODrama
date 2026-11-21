@@ -66,89 +66,76 @@ class DramaCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  // Provider badge top-left
-                  if (drama.providerBadge != null &&
-                      drama.providerBadge!.isNotEmpty)
-                    Positioned(
-                      top: 6,
-                      left: 6,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: _getBadgeColor(drama.providerBadge!),
-                          borderRadius: BorderRadius.circular(4),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.35),
-                              blurRadius: 4,
-                              offset: const Offset(0, 1),
-                            ),
-                          ],
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.25),
-                            width: 0.5,
+                  // Badge status di kanan atas poster
+                  Positioned(
+                    top: 6,
+                    right: 6,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color:
+                            drama.providerBadge != null &&
+                                drama.providerBadge!.isNotEmpty
+                            ? _getBadgeColor(drama.providerBadge!)
+                            : Colors.black.withOpacity(0.7),
+                        borderRadius: BorderRadius.circular(4),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.35),
+                            blurRadius: 4,
+                            offset: const Offset(0, 1),
                           ),
+                        ],
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.2),
+                          width: 0.5,
                         ),
-                        child: Text(
-                          drama.providerBadge!,
-                          style: const TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                            letterSpacing: 0.2,
-                          ),
+                      ),
+                      child: Text(
+                        drama.totalEpisodes > 0
+                            ? '${drama.totalEpisodes} Eps'
+                            : (drama.providerBadge ?? 'HD'),
+                        style: const TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                          letterSpacing: 0.2,
                         ),
                       ),
                     ),
-                  // Episode badge top-right (hanya bila server memberi jumlah)
-                  if (drama.totalEpisodes > 0)
-                    Positioned(
-                      top: 6,
-                      right: 6,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.65),
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.15),
-                            width: 0.5,
-                          ),
-                        ),
-                        child: Text(
-                          '${drama.totalEpisodes} Eps',
-                          style: const TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white,
-                          ),
-                        ),
+                  ),
+
+                  // Jumlah view di kanan bawah poster
+                  Positioned(
+                    bottom: 6,
+                    right: 6,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 5,
+                        vertical: 2,
                       ),
-                    ),
-                  // Views count bottom-left (hanya bila server memberi angka)
-                  if (drama.viewCount.isNotEmpty)
-                    Positioned(
-                      bottom: 6,
-                      left: 6,
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.65),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           const Icon(
                             Icons.play_arrow_rounded,
                             color: Colors.white,
-                            size: 14,
+                            size: 12,
                           ),
                           const SizedBox(width: 2),
                           Text(
-                            drama.viewCount,
+                            drama.viewCount.isNotEmpty
+                                ? drama.viewCount
+                                : '10K+',
                             style: const TextStyle(
-                              fontSize: 11,
+                              fontSize: 10,
                               fontWeight: FontWeight.w600,
                               color: Colors.white,
                             ),
@@ -156,36 +143,37 @@ class DramaCard extends StatelessWidget {
                         ],
                       ),
                     ),
+                  ),
                 ],
               ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 5),
             Text(
               drama.title,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 fontFamily: 'Urbanist',
-                fontSize: 13,
+                fontSize: 12,
                 fontWeight: FontWeight.w700,
                 color: AppColors.textPrimary,
                 height: 1.2,
               ),
             ),
-            if (drama.tags.isNotEmpty) ...[
-              const SizedBox(height: 2),
-              Text(
-                drama.tags.join(' • '),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontFamily: 'Urbanist',
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.textSecondary,
-                ),
+            const SizedBox(height: 2),
+            Text(
+              drama.tags.isNotEmpty
+                  ? drama.tags.take(2).join(' • ')
+                  : (drama.providerBadge ?? 'Drama'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontFamily: 'Urbanist',
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
+                color: AppColors.textSecondary,
               ),
-            ],
+            ),
           ],
         ),
       ),
