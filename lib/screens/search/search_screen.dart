@@ -11,7 +11,8 @@ import '../../widgets/drama_card.dart';
 import '../player/player_screen.dart';
 
 class SearchScreen extends StatefulWidget {
-  const SearchScreen({super.key});
+  final String? initialQuery;
+  const SearchScreen({super.key, this.initialQuery});
 
   @override
   State<SearchScreen> createState() => _SearchScreenState();
@@ -48,6 +49,10 @@ class _SearchScreenState extends State<SearchScreen> {
   void initState() {
     super.initState();
     _resultsController.addListener(_onResultsScroll);
+    if (widget.initialQuery != null && widget.initialQuery!.trim().isNotEmpty) {
+      _searchController.text = widget.initialQuery!.trim();
+      _onSearch(widget.initialQuery!.trim());
+    }
     _loadTrending();
   }
 

@@ -5,6 +5,7 @@ import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_assets.dart';
 import '../../data/models/drama_model.dart';
 import '../../data/services/shorttv_service.dart';
+import '../../data/services/app_settings_service.dart';
 import '../../widgets/drama_card.dart';
 import '../../widgets/hero_banner.dart';
 import '../player/player_screen.dart';
@@ -28,16 +29,20 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _hasMore = false;
   bool _isLoadingMore = false;
 
-  // Tab Beranda Berbasis Kategori Otentik Server MovieBox:
-  // 1. Sulih Suara 🎧: 100% Drama Dubbing Bahasa Indonesia (classify: 'Indonesian dub')
-  // 2. Sedang Tren 🔥: Drama viral paling banyak ditonton (sort: 'Hottest')
-  // 3. Terbaru 🎉: Drama rilis paling baru (sort: 'Latest')
-  // 4. Lokal Indo 🇮🇩: Drama buatan kreator Indonesia & Vision+ (country: 'Indonesia')
-  // 5. Cerita Barat 🐺: Drama werewolf & barat ReelShort (country: 'United States')
-  // 6. Drama Asia 👑: Drama CEO & miliarder ShortMax/Asia (country: 'China')
-  // 7. Rating Top ⭐: Drama skor kepuasan tertinggi (sort: 'Rating')
+  // Tab Beranda Berbasis Kategori Otentik Server MovieBox & Mesin Sulih Suara:
+  // 1. Sulih Suara 🎧: Konten pencarian "sulih suara" (ratusan drama sulih suara studio)
+  // 2. Dubbing 🗣️: Konten pencarian "dubbing" (ratusan drama dubbing studio terpisah)
+  // 3. Versi Dub 🎙️: Konten pencarian "versi dub" (ratusan drama versi dubbing alternatif)
+  // 4. Sedang Tren 🔥: Drama viral paling banyak ditonton (sort: 'Hottest')
+  // 5. Terbaru 🎉: Drama rilis paling baru (sort: 'Latest')
+  // 6. Lokal Indo 🇮🇩: Drama buatan kreator Indonesia & Vision+ (country: 'Indonesia')
+  // 7. Cerita Barat 🐺: Drama werewolf & barat ReelShort (country: 'United States')
+  // 8. Drama Asia 👑: Drama CEO & miliarder ShortMax/Asia (country: 'China')
+  // 9. Rating Top ⭐: Drama skor kepuasan tertinggi (sort: 'Rating')
   final List<CategoryModel> _categories = const [
     CategoryModel(id: 'sulih_suara', name: 'Sulih Suara 🎧'),
+    CategoryModel(id: 'dubbing', name: 'Dubbing 🗣️'),
+    CategoryModel(id: 'versi_dub', name: 'Versi Dub 🎙️'),
     CategoryModel(id: 'trending', name: 'Sedang Tren 🔥'),
     CategoryModel(id: 'terbaru', name: 'Terbaru 🎉'),
     CategoryModel(id: 'lokal_indo', name: 'Lokal Indo 🇮🇩'),
@@ -79,6 +84,10 @@ class _HomeScreenState extends State<HomeScreen> {
     );
 
     if (mounted) {
+      // Rotasi dinamis: acak saat user melakukan pull-to-refresh agar konten selalu segar
+      if (forceRefresh && list.isNotEmpty) {
+        list.shuffle();
+      }
       _seenIds
         ..clear()
         ..addAll(list.map((d) => d.id));
@@ -276,6 +285,98 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
+              // Rekomendasi Tag Pintar (berdasarkan kebiasaan tontonan user)
+              Builder(
+                builder: (context) {
+                  final topTags = AppSettingsService.instance
+                      .getTopFavoriteTags(limit: 6);
+                  if (topTags.isEmpty) {
+                    return const SliverToBoxAdapter(child: SizedBox.shrink());
+                  }
+                  return SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.auto_awesome_rounded,
+                                size: 14,
+                                color: AppColors.primary,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Suka Tema Ini:',
+                                style: TextStyle(
+                                  fontFamily: 'Urbanist',
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.textSecondary.withOpacity(
+                                    0.9,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          SizedBox(
+                            height: 30,
+                            child: ListView.builder(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: topTags.length,
+                              itemBuilder: (context, idx) {
+                                final tag = topTags[idx];
+                                return GestureDetector(
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            SearchScreen(initialQuery: tag),
+                                      ),
+                                    );
+                                  },
+                                  child: Container(
+                                    margin: const EdgeInsets.only(right: 8),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.surface,
+                                      borderRadius: BorderRadius.circular(15),
+                                      border: Border.all(
+                                        color: AppColors.primary.withOpacity(
+                                          0.4,
+                                        ),
+                                        width: 0.8,
+                                      ),
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        '#$tag',
+                                        style: const TextStyle(
+                                          fontFamily: 'Urbanist',
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.primary,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+
               // Section Title
               SliverToBoxAdapter(
                 child: Padding(
@@ -359,21 +460,18 @@ class _HomeScreenState extends State<HomeScreen> {
                   sliver: SliverGrid(
                     gridDelegate:
                         const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      crossAxisSpacing: 12,
-                      mainAxisSpacing: 16,
-                      childAspectRatio: 0.58,
-                    ),
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        final drama = dramas[index];
-                        return DramaCard(
-                          drama: drama,
-                          onTap: () => _openPlayer(drama),
-                        );
-                      },
-                      childCount: dramas.length,
-                    ),
+                          crossAxisCount: 2,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 16,
+                          childAspectRatio: 0.58,
+                        ),
+                    delegate: SliverChildBuilderDelegate((context, index) {
+                      final drama = dramas[index];
+                      return DramaCard(
+                        drama: drama,
+                        onTap: () => _openPlayer(drama),
+                      );
+                    }, childCount: dramas.length),
                   ),
                 ),
 
@@ -398,6 +496,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _openPlayer(DramaModel drama) {
+    AppSettingsService.instance.recordTagsWatched(drama.tags);
     Navigator.push(
       context,
       MaterialPageRoute(

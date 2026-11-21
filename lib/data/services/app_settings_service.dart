@@ -94,6 +94,8 @@ class AppSettingsService extends ChangeNotifier {
   // Riwayat impresi cuplikan (ID drama -> timestamp ms saat di-swipe/dilihat).
   // Disimpan lokal agar saat buka aplikasi, drama yang baru saja di-swipe tidak muncul lagi.
   final Map<String, int> _seenPreviews = {};
+  // Skor preferensi tema/tag yang sering ditonton user (tag -> skor tontonan)
+  final Map<String, int> _tagScores = {};
 
   String get defaultQuality => _defaultQuality;
   bool get autoPlayNext => _autoPlayNext;
@@ -175,6 +177,18 @@ class AppSettingsService extends ChangeNotifier {
           });
         } catch (_) {}
       }
+
+      final tagsRaw = p.getString('godrama_tag_scores');
+      if (tagsRaw != null && tagsRaw.isNotEmpty) {
+        try {
+          final decoded = jsonDecode(tagsRaw) as Map;
+          decoded.forEach((key, val) {
+            if (val is num && val > 0) {
+              _tagScores[key.toString()] = val.toInt();
+            }
+          });
+        } catch (_) {}
+      }
     } catch (e) {
       // Gagal baca storage bukan fatal: lanjut mode memori.
       debugPrint('[AppSettingsService] Gagal baca storage: $e');
@@ -205,6 +219,46 @@ class AppSettingsService extends ChangeNotifier {
       }
     }
     await _prefs?.setString('godrama_seen_previews', jsonEncode(_seenPreviews));
+  }
+
+  Future<void> _persistTagScores() async {
+    // Batasi maksimal 50 tag teratas agar storage hemat
+    if (_tagScores.length > 50) {
+      final sortedKeys = _tagScores.keys.toList()
+        ..sort((a, b) => _tagScores[b]!.compareTo(_tagScores[a]!));
+      final trimmed = <String, int>{};
+      for (int i = 0; i < 50; i++) {
+        trimmed[sortedKeys[i]] = _tagScores[sortedKeys[i]]!;
+      }
+      _tagScores
+        ..clear()
+        ..addAll(trimmed);
+    }
+    await _prefs?.setString('godrama_tag_scores', jsonEncode(_tagScores));
+  }
+
+  /// Catat tag yang sering ditonton user untuk pemetaan preferensi profil
+  void recordTagsWatched(List<String> tags, {int weight = 1}) {
+    if (tags.isEmpty) return;
+    bool changed = false;
+    for (final tag in tags) {
+      final clean = tag.trim();
+      if (clean.isEmpty || clean.length < 2) continue;
+      _tagScores[clean] = (_tagScores[clean] ?? 0) + weight;
+      changed = true;
+    }
+    if (changed) {
+      _persistTagScores();
+      notifyListeners();
+    }
+  }
+
+  /// Dapatkan daftar tag terfavorit user (skor tontonan tertinggi)
+  List<String> getTopFavoriteTags({int limit = 5}) {
+    if (_tagScores.isEmpty) return const [];
+    final entries = _tagScores.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    return entries.take(limit).map((e) => e.key).toList();
   }
 
   /// Catat drama sebagai sudah pernah di-swipe / diintip di cuplikan feed For You.
@@ -261,7 +315,9 @@ class AppSettingsService extends ChangeNotifier {
 
       // Kriteria 2: Nonton episode 1-9 -> Cooldown 24 jam
       if (progress.episodeIndex >= 1) {
-        final hoursSince = DateTime.now().difference(progress.updatedAt).inHours;
+        final hoursSince = DateTime.now()
+            .difference(progress.updatedAt)
+            .inHours;
         if (hoursSince < 24) return true;
       }
     }
@@ -275,6 +331,7 @@ class AppSettingsService extends ChangeNotifier {
   }
 
   void addToWatchHistory(DramaModel drama) {
+    recordTagsWatched(drama.tags, weight: 1);
     final existingIndex = _history.indexWhere((e) => e.drama.id == drama.id);
     // Entri lama dipertahankan progresnya, hanya naik ke paling atas
     // dan metadata dramanya diperbarui.
@@ -282,10 +339,7 @@ class AppSettingsService extends ChangeNotifier {
         ? _history[existingIndex].progress
         : WatchProgress(updatedAt: DateTime.now());
     if (existingIndex >= 0) _history.removeAt(existingIndex);
-    _history.insert(
-      0,
-      HistoryEntry(drama: drama, progress: keptProgress),
-    );
+    _history.insert(0, HistoryEntry(drama: drama, progress: keptProgress));
     if (_history.length > 50) {
       _history.removeLast();
     }

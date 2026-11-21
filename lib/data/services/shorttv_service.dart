@@ -296,7 +296,8 @@ class ShortTvService {
       } else {
         final errBody = await response.transform(utf8.decoder).join();
         debugPrint(
-            '[ShortTvService] HTTP ${response.statusCode} for $pathWithQuery: $errBody');
+          '[ShortTvService] HTTP ${response.statusCode} for $pathWithQuery: $errBody',
+        );
         if ((response.statusCode == 401 || response.statusCode == 441) &&
             !isRetry) {
           _token = null;
@@ -348,10 +349,7 @@ class ShortTvService {
   }
 
   /// Interleave 1:1 dua pool (sulih suara / dubbing).
-  List<DramaModel> _interleave(
-    List<DramaModel> a,
-    List<DramaModel> b,
-  ) {
+  List<DramaModel> _interleave(List<DramaModel> a, List<DramaModel> b) {
     final out = <DramaModel>[];
     final maxLen = a.length > b.length ? a.length : b.length;
     for (int i = 0; i < maxLen; i++) {
@@ -400,7 +398,9 @@ class ShortTvService {
       if (items != null && items.isNotEmpty) {
         return items
             .whereType<Map<String, dynamic>>()
-            .map((it) => _mapToDramaModel(it, defaultBadge: defaultProviderBadge))
+            .map(
+              (it) => _mapToDramaModel(it, defaultBadge: defaultProviderBadge),
+            )
             .where((d) => d.id.isNotEmpty)
             .toList();
       }
@@ -449,8 +449,10 @@ class ShortTvService {
     }
 
     final sectionsMap = <String, List<DramaModel>>{};
-    final resp =
-        await _request('GET', '/wefeed-mobile-bff/tab-operating?tabId=$tabId');
+    final resp = await _request(
+      'GET',
+      '/wefeed-mobile-bff/tab-operating?tabId=$tabId',
+    );
     if (resp != null &&
         resp['code'] == 0 &&
         resp['data'] is Map<String, dynamic>) {
@@ -501,12 +503,25 @@ class ShortTvService {
     switch (tab) {
       case 'sulih_suara':
       case 'untuk_anda':
-        return await fetchShortTvCatalog(
-          classify: 'Indonesian dub',
-          sort: 'Hottest',
+        return await searchShortTv(
+          'sulih suara',
           page: page,
-          perPage: 15,
+          perPage: 20,
           defaultProviderBadge: 'Sulih Suara',
+        );
+      case 'dubbing':
+        return await searchShortTv(
+          'dubbing',
+          page: page,
+          perPage: 20,
+          defaultProviderBadge: 'Dubbing',
+        );
+      case 'versi_dub':
+        return await searchShortTv(
+          'versi dub',
+          page: page,
+          perPage: 20,
+          defaultProviderBadge: 'Versi Dub',
         );
       case 'trending':
       case 'terpanas':
@@ -583,8 +598,9 @@ class ShortTvService {
     int endPosition = 100,
   }) async {
     final actualStart = startPos <= 0 ? 1 : startPos;
-    final actualEnd =
-        endPosition < actualStart ? actualStart + 20 : endPosition;
+    final actualEnd = endPosition < actualStart
+        ? actualStart + 20
+        : endPosition;
 
     final all = <EpisodeModel>[];
     int cur = actualStart;
@@ -682,13 +698,21 @@ class ShortTvService {
     return [];
   }
 
-  /// Cari drama ShortTV
+  /// Cari drama ShortTV lewat mesin pencari server
   Future<List<DramaModel>> searchShortTv(
     String keyword, {
     int page = 1,
-    int perPage = 10,
+    int perPage = 20,
+    int subjectType = 7,
+    String? defaultProviderBadge,
   }) async {
-    final payload = {'keyword': keyword, 'page': page, 'perPage': perPage};
+    final safePerPage = perPage > 20 ? 20 : perPage;
+    final payload = {
+      'keyword': keyword,
+      'subjectType': subjectType,
+      'page': page,
+      'perPage': safePerPage,
+    };
 
     final resp = await _request(
       'POST',
@@ -702,13 +726,10 @@ class ShortTvService {
       if (items != null) {
         return items
             .whereType<Map<String, dynamic>>()
-            .where(
-              (it) =>
-                  it['subjectType'] == 7 ||
-                  it['genre']?.toString().toLowerCase().contains('short') ==
-                      true,
+            .map(
+              (it) => _mapToDramaModel(it, defaultBadge: defaultProviderBadge),
             )
-            .map(_mapToDramaModel)
+            .where((d) => d.id.isNotEmpty)
             .toList();
       }
     }
@@ -778,19 +799,21 @@ class ShortTvService {
     }
 
     // Tanpa angka penonton dari server, kosongkan — jangan acak.
-    final viewCountNum = (json['viewCount'] as num?)?.toInt() ??
+    final viewCountNum =
+        (json['viewCount'] as num?)?.toInt() ??
         (json['playCount'] as num?)?.toInt() ??
         (json['viewers'] as num?)?.toInt();
     final viewCountStr = viewCountNum == null
         ? ''
         : viewCountNum > 1000
-            ? '${(viewCountNum / 1000).toStringAsFixed(1)}K'
-            : '$viewCountNum';
+        ? '${(viewCountNum / 1000).toStringAsFixed(1)}K'
+        : '$viewCountNum';
 
     // Tanpa rating dari server, null — jangan acak 4.5-4.9.
     // Jika server mengembalikan imdbRatingValue (skala 10), konversi ke skala 5.0 bintang.
     final rawImdb = double.tryParse(json['imdbRatingValue']?.toString() ?? '');
-    final rating = (json['rating'] as num?)?.toDouble() ??
+    final rating =
+        (json['rating'] as num?)?.toDouble() ??
         (rawImdb != null ? rawImdb / 2.0 : null);
 
     // Deteksi provider badge yang jujur & akurat:
@@ -852,8 +875,5 @@ class _SectionsCacheEntry {
   final Map<String, List<DramaModel>> sections;
   final DateTime fetchedAt;
 
-  const _SectionsCacheEntry({
-    required this.sections,
-    required this.fetchedAt,
-  });
+  const _SectionsCacheEntry({required this.sections, required this.fetchedAt});
 }

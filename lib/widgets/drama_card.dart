@@ -67,7 +67,8 @@ class DramaCard extends StatelessWidget {
                     ),
                   ),
                   // Provider badge top-left
-                  if (drama.providerBadge != null && drama.providerBadge!.isNotEmpty)
+                  if (drama.providerBadge != null &&
+                      drama.providerBadge!.isNotEmpty)
                     Positioned(
                       top: 6,
                       left: 6,
@@ -208,6 +209,10 @@ class DramaCard extends StatelessWidget {
         return const Color(0xFF0A84FF);
       case 'sulih suara':
         return const Color(0xFF7B1FA2);
+      case 'dubbing':
+        return const Color(0xFF00897B);
+      case 'versi dub':
+        return const Color(0xFFD81B60);
       case 'trending':
         return const Color(0xFFFF3B30);
       case 'terbaru':
