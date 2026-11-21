@@ -24,7 +24,6 @@ class _ForYouScreenState extends State<ForYouScreen> {
   List<DramaModel> _dramas = [];
   int _activeDramaIndex = 0;
   bool _isLoading = true;
-  String _selectedSort = 'Hottest';
   // Pagination: halaman 1 dulu (cepat), halaman berikut saat swipe
   // mendekati akhir feed.
   final Set<String> _seenIds = {};
@@ -46,20 +45,9 @@ class _ForYouScreenState extends State<ForYouScreen> {
     }
   }
 
-  void _onSortChanged(String newSort) {
-    if (_selectedSort == newSort) return;
-    setState(() {
-      _selectedSort = newSort;
-      _isLoading = true;
-    });
-    if (_pageController.hasClients) {
-      _pageController.jumpToPage(0);
-    }
-    _loadLiveShortDramas();
-  }
-
   void _onReelAutoNext(int fromIndex) {
-    if (fromIndex == _activeDramaIndex && _activeDramaIndex < _dramas.length - 1) {
+    if (fromIndex == _activeDramaIndex &&
+        _activeDramaIndex < _dramas.length - 1) {
       if (_activeDramaIndex < _dramas.length) {
         AppSettingsService.instance.recordPreviewImpression(
           _dramas[_activeDramaIndex].id,
@@ -84,14 +72,13 @@ class _ForYouScreenState extends State<ForYouScreen> {
     // dan tahan drama yang baru saja di-swipe lewat di cuplikan (cooldown 12 jam).
     // Ambil page berikutnya otomatis agar feed di tangan user selalu konten segar!
     while (results.length < 10 && page <= 12) {
-      final live = await ShortTvService.instance.fetchForYouPage(
-        page,
-        sort: _selectedSort,
-      );
+      final live = await ShortTvService.instance.fetchForYouPage(page);
       if (live.isEmpty) break;
-      final filtered = live.where((d) =>
-        !AppSettingsService.instance.shouldSuppressFromForYou(d.id)
-      ).toList();
+      final filtered = live
+          .where(
+            (d) => !AppSettingsService.instance.shouldSuppressFromForYou(d.id),
+          )
+          .toList();
       for (final d in filtered) {
         if (!_seenIds.contains(d.id)) {
           results.add(d);
@@ -105,10 +92,7 @@ class _ForYouScreenState extends State<ForYouScreen> {
     // Safety Fallback: Bila seluruh drama sedang dalam cooldown (misal user sudah swipe ratusan drama),
     // muat ulang tanpa filter impresi agar feed tidak pernah kosong sama sekali.
     if (results.isEmpty) {
-      final fallbackLive = await ShortTvService.instance.fetchForYouPage(
-        1,
-        sort: _selectedSort,
-      );
+      final fallbackLive = await ShortTvService.instance.fetchForYouPage(1);
       results.addAll(fallbackLive);
       _currentPage = 1;
     }
@@ -130,14 +114,13 @@ class _ForYouScreenState extends State<ForYouScreen> {
     if (_isLoadingMore || !_hasMore) return;
     _isLoadingMore = true;
     final nextPage = _currentPage + 1;
-    final live = await ShortTvService.instance.fetchForYouPage(
-      nextPage,
-      sort: _selectedSort,
-    );
+    final live = await ShortTvService.instance.fetchForYouPage(nextPage);
     if (!mounted) return;
-    final filtered = live.where((d) =>
-      !AppSettingsService.instance.shouldSuppressFromForYou(d.id)
-    ).toList();
+    final filtered = live
+        .where(
+          (d) => !AppSettingsService.instance.shouldSuppressFromForYou(d.id),
+        )
+        .toList();
     final fresh = filtered.where((d) => _seenIds.add(d.id)).toList();
     setState(() {
       _dramas.addAll(fresh);
@@ -145,30 +128,6 @@ class _ForYouScreenState extends State<ForYouScreen> {
       _hasMore = live.isNotEmpty;
       _isLoadingMore = false;
     });
-  }
-
-  Widget _buildSortChip(String sortKey, String label) {
-    final isSelected = _selectedSort == sortKey;
-    return GestureDetector(
-      onTap: () => _onSortChanged(sortKey),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary : Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontFamily: 'Urbanist',
-            fontSize: 12,
-            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-            color: isSelected ? Colors.white : Colors.white70,
-          ),
-        ),
-      ),
-    );
   }
 
   @override
@@ -229,63 +188,33 @@ class _ForYouScreenState extends State<ForYouScreen> {
 
     return Scaffold(
       backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          PageView.builder(
-            controller: _pageController,
-            scrollDirection: Axis.vertical,
-            itemCount: _dramas.length,
-            onPageChanged: (index) {
-              // Catat drama yang baru saja di-swipe lewat sebagai sudah diintip
-              if (_activeDramaIndex < _dramas.length) {
-                AppSettingsService.instance.recordPreviewImpression(
-                  _dramas[_activeDramaIndex].id,
-                );
-              }
-              setState(() {
-                _activeDramaIndex = index;
-              });
-              if (index >= _dramas.length - 3) _loadMore();
-            },
-            itemBuilder: (context, index) {
-              final drama = _dramas[index];
-              final isCurrent = widget.isActive && (index == _activeDramaIndex);
-              return _ReelItem(
-                key: ValueKey('${drama.id}_${widget.isActive}'),
-                drama: drama,
-                isActive: isCurrent,
-                isNext: widget.isActive && (index == _activeDramaIndex + 1),
-                onAutoNext: () => _onReelAutoNext(index),
-              );
-            },
-          ),
-          // Top Sort Selector (Terpanas 🔥, Terbaru ✨, Rating 👑)
-          Positioned(
-            top: MediaQuery.of(context).padding.top + 8,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.55),
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: Colors.white12, width: 0.8),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _buildSortChip('Hottest', 'Terpanas 🔥'),
-                    const SizedBox(width: 4),
-                    _buildSortChip('Latest', 'Terbaru ✨'),
-                    const SizedBox(width: 4),
-                    _buildSortChip('Rating', 'Rating 👑'),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
+      body: PageView.builder(
+        controller: _pageController,
+        scrollDirection: Axis.vertical,
+        itemCount: _dramas.length,
+        onPageChanged: (index) {
+          // Catat drama yang baru saja di-swipe lewat sebagai sudah diintip
+          if (_activeDramaIndex < _dramas.length) {
+            AppSettingsService.instance.recordPreviewImpression(
+              _dramas[_activeDramaIndex].id,
+            );
+          }
+          setState(() {
+            _activeDramaIndex = index;
+          });
+          if (index >= _dramas.length - 3) _loadMore();
+        },
+        itemBuilder: (context, index) {
+          final drama = _dramas[index];
+          final isCurrent = widget.isActive && (index == _activeDramaIndex);
+          return _ReelItem(
+            key: ValueKey('${drama.id}_${widget.isActive}'),
+            drama: drama,
+            isActive: isCurrent,
+            isNext: widget.isActive && (index == _activeDramaIndex + 1),
+            onAutoNext: () => _onReelAutoNext(index),
+          );
+        },
       ),
     );
   }
@@ -367,8 +296,7 @@ class _ReelItemState extends State<_ReelItem> {
     super.didUpdateWidget(oldWidget);
     if (widget.isActive && !oldWidget.isActive) {
       // Jadi aktif: putar controller yang sudah di-preload (standby) atau init baru.
-      if (_videoController != null &&
-          _videoController!.value.isInitialized) {
+      if (_videoController != null && _videoController!.value.isInitialized) {
         _videoController?.seekTo(Duration.zero);
         _videoController?.play();
         _startProgressTracker();
@@ -388,8 +316,7 @@ class _ReelItemState extends State<_ReelItem> {
   /// Memutar cuplikan (Episode 1) sebagai teaser preview.
   Future<void> _initTeaserVideo() async {
     if (_isInitializingVideo) return;
-    if (_videoController != null &&
-        _videoController!.value.isInitialized) {
+    if (_videoController != null && _videoController!.value.isInitialized) {
       return;
     }
     if (mounted) setState(() => _videoError = false);

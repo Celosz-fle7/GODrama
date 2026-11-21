@@ -1,8 +1,8 @@
 {
-  "changelog": "- Tab Beranda baru: Untukmu 🎯 menyatukan 1.500+ drama dubbing dari kolam Sulih Suara, Dubbing, dan Versi Dub\n- Pop-up pemilihan tema favorit saat pertama kali install (CEO, Balas Dendam, Pernikahan, Fantasi, Romantis, dll)\n- Pengaturan preferensi tema drama di menu Profil yang bisa diubah kapan saja\n- Tab For You kini tersinkronisasi penuh dengan rekomendasi tema pilihan Anda",
-  "download_url": "https://github.com/Celosz-fle7/GODrama/releases/download/v1.0.26/GoDrama-release.apk",
+  "changelog": "- Tampilan Beranda lebih bersih dan minimalis tanpa deretan chip tema\n- Tab Untukmu memadukan 3 kata kunci dubbing langsung dengan preferensi tema pilihan Anda\n- Tab For You murni reel vertikal acak tanpa tombol sortir yang mengganggu",
+  "download_url": "https://github.com/Celosz-fle7/GODrama/releases/download/v1.0.27/GoDrama-release.apk",
   "is_force_update": false,
-  "title": "Pembaruan GoDrama v1.0.26!",
-  "version_code": 27,
-  "version_name": "1.0.26"
+  "title": "Pembaruan GoDrama v1.0.27!",
+  "version_code": 28,
+  "version_name": "1.0.27"
 }

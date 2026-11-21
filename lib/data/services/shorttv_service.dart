@@ -409,13 +409,9 @@ class ShortTvService {
     return [];
   }
 
-  /// For You Feed per halaman (Short drama berbahasa Indonesia dengan dynamic sorting & preferensi tag).
-  /// Mengambil konten acak dari kolam Untukmu (3 kata kunci dubbing server).
-  Future<List<DramaModel>> fetchForYouPage(
-    int page, {
-    String sort = 'Hottest',
-    int perPage = 10,
-  }) async {
+  /// For You Feed per halaman (Short drama berbahasa Indonesia dengan konten acak & segar).
+  /// Mengambil konten acak dari kolam Untukmu (3 kata kunci dubbing server + tag preferensi).
+  Future<List<DramaModel>> fetchForYouPage(int page, {int perPage = 10}) async {
     if (page < 1) return [];
     final pool = await fetchUntukmuDramas(page: page);
     if (pool.isNotEmpty) {
@@ -424,7 +420,7 @@ class ShortTvService {
     }
     return await fetchShortTvCatalog(
       classify: 'Indonesian dub',
-      sort: sort,
+      sort: 'Hottest',
       page: page,
       perPage: perPage,
       defaultProviderBadge: 'Sulih Suara',
@@ -432,54 +428,115 @@ class ShortTvService {
   }
 
   /// Kolam raksasa 3 kata kunci dubbing ('sulih suara', 'dubbing', 'versi dub')
-  /// digabung dan diprioritaskan berdasarkan tag preferensi user
+  /// digabung dan disaring langsung menggunakan tag preferensi pilihan user
   Future<List<DramaModel>> fetchUntukmuDramas({
     int page = 1,
     bool forceRefresh = false,
   }) async {
     final List<DramaModel> pool = [];
+    final preferred = AppSettingsService.instance.preferredTags.toList();
+
+    // Deteksi apakah user memilih tema spesifik (bukan memilih semua atau kosong)
+    final bool hasSpecificTags =
+        preferred.isNotEmpty &&
+        preferred.length < AppSettingsService.availableThemeTags.length;
+
     if (page == 1) {
-      // Ambil serentak 3 kata kunci dubbing untuk halaman pertama
-      final results = await Future.wait([
-        searchShortTv(
-          'sulih suara',
-          page: 1,
-          perPage: 12,
-          defaultProviderBadge: 'Sulih Suara',
-        ),
-        searchShortTv(
-          'dubbing',
-          page: 1,
-          perPage: 12,
-          defaultProviderBadge: 'Dubbing',
-        ),
-        searchShortTv(
-          'versi dub',
-          page: 1,
-          perPage: 12,
-          defaultProviderBadge: 'Versi Dub',
-        ),
-      ]);
-      pool.addAll(results[0]);
-      pool.addAll(results[1]);
-      pool.addAll(results[2]);
+      if (hasSpecificTags) {
+        // Gabungkan 3 kata kunci dubbing langsung dengan tag preferensi user
+        final futures = <Future<List<DramaModel>>>[];
+        final activeTags = preferred.take(3).toList();
+        for (final tag in activeTags) {
+          futures.add(
+            searchShortTv(
+              'sulih suara $tag',
+              page: 1,
+              perPage: 12,
+              defaultProviderBadge: 'Sulih Suara',
+            ),
+          );
+          futures.add(
+            searchShortTv(
+              'dubbing $tag',
+              page: 1,
+              perPage: 12,
+              defaultProviderBadge: 'Dubbing',
+            ),
+          );
+        }
+        // Tambahkan variasi versi dub
+        futures.add(
+          searchShortTv(
+            'versi dub',
+            page: 1,
+            perPage: 12,
+            defaultProviderBadge: 'Versi Dub',
+          ),
+        );
+        final results = await Future.wait(futures);
+        for (final r in results) {
+          pool.addAll(r);
+        }
+      } else {
+        // Ambil serentak 3 kata kunci dubbing utama
+        final results = await Future.wait([
+          searchShortTv(
+            'sulih suara',
+            page: 1,
+            perPage: 12,
+            defaultProviderBadge: 'Sulih Suara',
+          ),
+          searchShortTv(
+            'dubbing',
+            page: 1,
+            perPage: 12,
+            defaultProviderBadge: 'Dubbing',
+          ),
+          searchShortTv(
+            'versi dub',
+            page: 1,
+            perPage: 12,
+            defaultProviderBadge: 'Versi Dub',
+          ),
+        ]);
+        pool.addAll(results[0]);
+        pool.addAll(results[1]);
+        pool.addAll(results[2]);
+      }
     } else {
       // Paginasi kontinu: selang-seling keyword berdasarkan nomor halaman
       final kwIndex = (page - 1) % 3;
       final actualPage = ((page - 1) ~/ 3) + 1;
       final kws = ['sulih suara', 'dubbing', 'versi dub'];
       final badges = ['Sulih Suara', 'Dubbing', 'Versi Dub'];
+
+      String query = kws[kwIndex];
+      if (hasSpecificTags) {
+        final tagIndex = (page - 1) % preferred.length;
+        query = '$query ${preferred[tagIndex]}';
+      }
+
       final res = await searchShortTv(
-        kws[kwIndex],
+        query,
         page: actualPage + 1,
         perPage: 20,
         defaultProviderBadge: badges[kwIndex],
       );
       pool.addAll(res);
+
+      // Fallback bila kombinasi keyword spesifik habis di halaman lanjutan
+      if (pool.isEmpty) {
+        final fallback = await searchShortTv(
+          kws[kwIndex],
+          page: actualPage + 1,
+          perPage: 20,
+          defaultProviderBadge: badges[kwIndex],
+        );
+        pool.addAll(fallback);
+      }
     }
 
     final uniqueDramas = _dedupe(pool);
-    final preferred = AppSettingsService.instance.preferredTags;
 
     // Prioritaskan drama yang tag-nya cocok dengan preferensi user ke posisi atas
     if (preferred.isNotEmpty) {
