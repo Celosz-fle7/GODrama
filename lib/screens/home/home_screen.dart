@@ -31,15 +31,15 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isLoadingMore = false;
 
   // 4 Kategori Beranda Utama:
-  // 1. Untukmu 🎯: Kolam gabungan 3 kata kunci dubbing ('sulih suara', 'dubbing', 'versi dub') + dipersonalisasi sesuai tag preferensi user
-  // 2. Sedang Tren 🔥: Drama viral paling banyak ditonton (sort: 'Hottest')
-  // 3. Terbaru 🎉: Drama rilis paling baru (sort: 'Latest')
-  // 4. Rating Top ⭐: Drama skor kepuasan tertinggi (sort: 'Rating')
+  // 1. Untukmu: Kolam gabungan 3 kata kunci dubbing ('sulih suara', 'dubbing', 'versi dub') + dipersonalisasi sesuai tag preferensi user
+  // 2. Sedang Tren: Drama viral paling banyak ditonton (sort: 'Hottest')
+  // 3. Terbaru: Drama rilis paling baru (sort: 'Latest')
+  // 4. Rating Top: Drama skor kepuasan tertinggi (sort: 'Rating')
   final List<CategoryModel> _categories = const [
-    CategoryModel(id: 'untukmu', name: 'Untukmu 🎯'),
-    CategoryModel(id: 'trending', name: 'Sedang Tren 🔥'),
-    CategoryModel(id: 'terbaru', name: 'Terbaru 🎉'),
-    CategoryModel(id: 'top_rating', name: 'Rating Top ⭐'),
+    CategoryModel(id: 'untukmu', name: 'Untukmu'),
+    CategoryModel(id: 'trending', name: 'Sedang Tren'),
+    CategoryModel(id: 'terbaru', name: 'Terbaru'),
+    CategoryModel(id: 'top_rating', name: 'Rating Top'),
   ];
 
   @override
@@ -146,79 +146,64 @@ class _HomeScreenState extends State<HomeScreen> {
           child: CustomScrollView(
             controller: _scrollController,
             slivers: [
-              // Top App Bar / Search Bar
+              // Mesin Pencari Banner Memanjang dari Ujung Kiri ke Kanan
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                  child: Row(
-                    children: [
-                      // App Title / Logo
-                      RichText(
-                        text: const TextSpan(
-                          children: [
-                            TextSpan(
-                              text: 'Go',
-                              style: TextStyle(
-                                fontFamily: 'Urbanist',
-                                fontSize: 24,
-                                fontWeight: FontWeight.w900,
-                                color: AppColors.primary,
-                              ),
-                            ),
-                            TextSpan(
-                              text: 'Drama',
-                              style: TextStyle(
-                                fontFamily: 'Urbanist',
-                                fontSize: 24,
-                                fontWeight: FontWeight.w800,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ],
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                  child: GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const SearchScreen(),
+                        ),
+                      );
+                    },
+                    child: Container(
+                      height: 42,
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(21),
+                        border: Border.all(
+                          color: AppColors.divider,
+                          width: 0.8,
                         ),
                       ),
-                      const Spacer(),
-                      // Search Button
-                      GestureDetector(
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const SearchScreen(),
-                            ),
-                          );
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: AppColors.surface,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: SvgPicture.asset(
+                      child: Row(
+                        children: [
+                          SvgPicture.asset(
                             AppAssets.icSearch,
-                            width: 20,
-                            height: 20,
+                            width: 18,
+                            height: 18,
                             colorFilter: const ColorFilter.mode(
-                              Colors.white,
+                              AppColors.textMuted,
                               BlendMode.srcIn,
                             ),
                           ),
-                        ),
+                          const SizedBox(width: 10),
+                          const Text(
+                            'Cari drama, genre, atau judul...',
+                            style: TextStyle(
+                              fontFamily: 'Urbanist',
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: AppColors.textMuted,
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
                 ),
               ),
 
-              // Category Tabs (Horizontal Scroll)
+              // Category Tabs (Tulisan Biasa Kecil + Garis Bawah saat Dipilih)
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.only(top: 4, bottom: 4),
+                  padding: const EdgeInsets.symmetric(vertical: 4),
                   child: SizedBox(
-                    height: 38,
+                    height: 36,
                     child: ListView.builder(
                       scrollDirection: Axis.horizontal,
                       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -237,37 +222,36 @@ class _HomeScreenState extends State<HomeScreen> {
                             }
                           },
                           child: Container(
-                            margin: const EdgeInsets.only(right: 8),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 8,
-                            ),
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? AppColors.primary
-                                  : AppColors.surface,
-                              borderRadius: BorderRadius.circular(18),
-                              border: Border.all(
-                                color: isSelected
-                                    ? AppColors.primary
-                                    : AppColors.divider,
-                                width: 0.8,
-                              ),
-                            ),
-                            child: Center(
-                              child: Text(
-                                category.name,
-                                style: TextStyle(
-                                  fontFamily: 'Urbanist',
-                                  fontSize: 13,
-                                  fontWeight: isSelected
-                                      ? FontWeight.w700
-                                      : FontWeight.w500,
-                                  color: isSelected
-                                      ? Colors.white
-                                      : AppColors.textSecondary,
+                            margin: const EdgeInsets.only(right: 22),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  category.name,
+                                  style: TextStyle(
+                                    fontFamily: 'Urbanist',
+                                    fontSize: 13,
+                                    fontWeight: isSelected
+                                        ? FontWeight.w800
+                                        : FontWeight.w500,
+                                    color: isSelected
+                                        ? Colors.white
+                                        : AppColors.textSecondary,
+                                  ),
                                 ),
-                              ),
+                                const SizedBox(height: 4),
+                                // Garis kecil di bawah tab yang aktif
+                                Container(
+                                  width: isSelected ? 22 : 0,
+                                  height: 2.5,
+                                  decoration: BoxDecoration(
+                                    color: isSelected
+                                        ? AppColors.primary
+                                        : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(2),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         );
@@ -277,40 +261,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
-              // Section Title
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        _categories
-                            .firstWhere(
-                              (c) => c.id == _selectedCategoryId,
-                              orElse: () => _categories.first,
-                            )
-                            .name,
-                        style: const TextStyle(
-                          fontFamily: 'Urbanist',
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                      Text(
-                        '${dramas.length} Judul',
-                        style: TextStyle(
-                          fontFamily: 'Urbanist',
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textSecondary.withOpacity(0.8),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+              const SliverToBoxAdapter(child: SizedBox(height: 8)),
 
               // 2-Column Responsive Drama Grid / Loading / Gagal+Retry
               if (_isLoading)
