@@ -1,8 +1,8 @@
 {
-  "changelog": "- Tampilan Beranda minimalis: Pencarian banner memanjang penuh dari kiri ke kanan\n- Tab navigasi kategori bergaris bawah khas modern dan tanpa judul ganda\n- Langsung menyajikan grid drama 3 kolom yang bersih dan elegan",
-  "download_url": "https://github.com/Celosz-fle7/GODrama/releases/download/v1.0.29/GoDrama-release.apk",
+  "changelog": "- Tampilan Beranda minimalis: Banner pencarian full memanjang & tab kategori bergaris bawah bersih\n- Grid 3 kolom drama rapi & bagian Akan Tayang\n- For You bersih: Hapus komentar & bagikan, fokus tonton dan simpan\n- Pemutar penuh disempurnakan: Bar episode interaktif menyamping dengan panah dropdown & tombol favorit samping",
+  "download_url": "https://github.com/Celosz-fle7/GODrama/releases/download/v1.0.30/GoDrama-release.apk",
   "is_force_update": false,
-  "title": "Pembaruan GoDrama v1.0.29!",
-  "version_code": 30,
-  "version_name": "1.0.29"
+  "title": "Pembaruan GoDrama v1.0.30!",
+  "version_code": 31,
+  "version_name": "1.0.30"
 }

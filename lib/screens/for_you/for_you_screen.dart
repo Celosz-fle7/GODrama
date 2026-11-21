@@ -442,137 +442,9 @@ class _ReelItemState extends State<_ReelItem> {
     }
   }
 
-  void _showCommentsSheet() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF1B1E26),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 36,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.white24,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Diskusi & Komentar (385)',
-                      style: TextStyle(
-                        fontFamily: 'Urbanist',
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white,
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(
-                        Icons.close_rounded,
-                        color: Colors.white70,
-                      ),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: CircleAvatar(
-                    backgroundColor: AppColors.primary.withOpacity(0.2),
-                    child: const Text(
-                      'R',
-                      style: TextStyle(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  title: const Text(
-                    'Rian Pratama',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  subtitle: const Text(
-                    'Alur ceritanya seru banget, plot twist di ep 10 di luar dugaan!',
-                    style: TextStyle(color: Colors.white70, fontSize: 12),
-                  ),
-                  trailing: const Text(
-                    '1j lalu',
-                    style: TextStyle(color: Colors.white38, fontSize: 11),
-                  ),
-                ),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: CircleAvatar(
-                    backgroundColor: Colors.purple.withOpacity(0.2),
-                    child: const Text(
-                      'S',
-                      style: TextStyle(
-                        color: Colors.purpleAccent,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  title: const Text(
-                    'Siti Aisyah',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  subtitle: const Text(
-                    'Dubbing Indonesianya rapi dan jernih, lanjut nonton!',
-                    style: TextStyle(color: Colors.white70, fontSize: 12),
-                  ),
-                  trailing: const Text(
-                    '3j lalu',
-                    style: TextStyle(color: Colors.white38, fontSize: 11),
-                  ),
-                ),
-                const SizedBox(height: 12),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  void _shareDrama() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Tautan "${widget.drama.title}" berhasil disalin!'),
-        backgroundColor: AppColors.surface,
-        duration: const Duration(seconds: 2),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final isFav = AppSettingsService.instance.isFavorite(widget.drama.id);
-    // Reel hanya memegang episode 1 untuk cuplikan — jumlah episode
-    // diambil dari data drama (server), bukan panjang list cuplikan.
-    final totalEps = widget.drama.totalEpisodes;
 
     return Stack(
       fit: StackFit.expand,
@@ -855,59 +727,25 @@ class _ReelItemState extends State<_ReelItem> {
             ),
           ),
 
-          // Sisi Kanan: Cukup 3 Ikon (Bookmark, Komentar, Bagikan)
+          // Sisi Kanan: Tombol Bookmark / Simpan
           Positioned(
             right: 12,
-            bottom: 60,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // 1. Bookmark / Simpan
-                GestureDetector(
-                  onTap: () {
-                    AppSettingsService.instance.toggleFavorite(widget.drama);
-                    setState(() {});
-                  },
-                  child: _buildActionItem(
-                    icon: Icon(
-                      isFav
-                          ? Icons.bookmark_rounded
-                          : Icons.bookmark_border_rounded,
-                      color: isFav ? AppColors.primary : Colors.white,
-                      size: 26,
-                    ),
-                    label: isFav ? 'Tersimpan' : 'Bookmark',
-                  ),
+            bottom: 40,
+            child: GestureDetector(
+              onTap: () {
+                AppSettingsService.instance.toggleFavorite(widget.drama);
+                setState(() {});
+              },
+              child: _buildActionItem(
+                icon: Icon(
+                  isFav
+                      ? Icons.bookmark_rounded
+                      : Icons.bookmark_border_rounded,
+                  color: isFav ? AppColors.primary : Colors.white,
+                  size: 26,
                 ),
-                const SizedBox(height: 16),
-
-                // 2. Komentar
-                GestureDetector(
-                  onTap: _showCommentsSheet,
-                  child: _buildActionItem(
-                    icon: const Icon(
-                      Icons.chat_bubble_outline_rounded,
-                      color: Colors.white,
-                      size: 24,
-                    ),
-                    label: 'Komentar',
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // 3. Bagikan
-                GestureDetector(
-                  onTap: _shareDrama,
-                  child: _buildActionItem(
-                    icon: const Icon(
-                      Icons.share_rounded,
-                      color: Colors.white,
-                      size: 24,
-                    ),
-                    label: 'Bagikan',
-                  ),
-                ),
-              ],
+                label: isFav ? 'Tersimpan' : 'Simpan',
+              ),
             ),
           ),
 

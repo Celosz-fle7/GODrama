@@ -407,18 +407,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _resetControlsTimer();
   }
 
-  void _downloadCurrentEpisode() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Mengunduh EP.${_currentEpisodeIndex + 1} "${widget.drama.title}"...',
-        ),
-        backgroundColor: AppColors.surface,
-        duration: const Duration(seconds: 2),
-      ),
-    );
-  }
-
   void _openEpisodeDrawer() {
     final totalEps = _episodes.isNotEmpty
         ? _episodes.length
@@ -844,46 +832,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 ),
               ),
 
-            // 5. RIGHT ACTION: IKON EPISODE (ketika kontrol aktif)
-            if (_showControls)
-              Positioned(
-                right: 14,
-                bottom: 105,
-                child: GestureDetector(
-                  onTap: _openEpisodeDrawer,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.55),
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white24, width: 0.8),
-                        ),
-                        child: const Icon(
-                          Icons.playlist_play_rounded,
-                          color: Colors.white,
-                          size: 26,
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      const Text(
-                        'Episode',
-                        style: TextStyle(
-                          fontFamily: 'Urbanist',
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-            // 6. FOOTER BAWAH: Sinopsis 1 Baris, Progress Bar & Tombol Unduh (ketika kontrol aktif)
+            // 5. FOOTER BAWAH: Sinopsis 1 Baris, Progress Bar, Episode Selector & Favorit (ketika kontrol aktif)
             if (_showControls)
               Positioned(
                 bottom: 0,
@@ -1014,64 +963,112 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         ),
                         const SizedBox(height: 6),
 
-                        // Tombol Unduh & Favorit
+                        // Baris List Episode & Favorit
                         Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            // Tombol Unduh
-                            GestureDetector(
-                              onTap: _downloadCurrentEpisode,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 14,
-                                  vertical: 7,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: AppColors.surface,
-                                  borderRadius: BorderRadius.circular(18),
-                                  border: Border.all(
-                                    color: AppColors.divider,
-                                    width: 0.8,
+                            // List Episode Selector (Menyamping berborder dengan dropdown arrow)
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: _openEpisodeDrawer,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 8,
                                   ),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(
-                                      Icons.download_rounded,
-                                      color: AppColors.primary,
-                                      size: 18,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.surface.withOpacity(0.85),
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(
+                                      color: Colors.white24,
+                                      width: 0.8,
                                     ),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      'Unduh EP.${_currentEpisodeIndex + 1}',
-                                      style: const TextStyle(
-                                        fontFamily: 'Urbanist',
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w700,
-                                        color: Colors.white,
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.playlist_play_rounded,
+                                        color: AppColors.primary,
+                                        size: 20,
                                       ),
-                                    ),
-                                  ],
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          _episodes.isNotEmpty
+                                              ? 'EP ${_currentEpisodeIndex + 1} / ${_episodes.length}'
+                                              : 'EP ${_currentEpisodeIndex + 1}',
+                                          style: const TextStyle(
+                                            fontFamily: 'Urbanist',
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w700,
+                                            color: Colors.white,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      const Icon(
+                                        Icons.keyboard_arrow_down_rounded,
+                                        color: Colors.white70,
+                                        size: 20,
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
+                            const SizedBox(width: 10),
 
-                            IconButton(
-                              icon: Icon(
-                                isFav
-                                    ? Icons.favorite_rounded
-                                    : Icons.favorite_border_rounded,
-                                color: isFav ? AppColors.primary : Colors.white,
-                                size: 24,
-                              ),
-                              onPressed: () {
+                            // Tombol Favorit
+                            GestureDetector(
+                              onTap: () {
                                 setState(() {
                                   AppSettingsService.instance.toggleFavorite(
                                     widget.drama,
                                   );
                                 });
                               },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 8,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.surface.withOpacity(0.85),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: isFav
+                                        ? AppColors.primary
+                                        : Colors.white24,
+                                    width: 0.8,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      isFav
+                                          ? Icons.favorite_rounded
+                                          : Icons.favorite_border_rounded,
+                                      color: isFav
+                                          ? AppColors.primary
+                                          : Colors.white,
+                                      size: 18,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      'Favorit',
+                                      style: TextStyle(
+                                        fontFamily: 'Urbanist',
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                        color: isFav
+                                            ? AppColors.primary
+                                            : Colors.white,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
                           ],
                         ),
