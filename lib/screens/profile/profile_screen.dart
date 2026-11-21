@@ -11,6 +11,7 @@ import '../../core/constants/app_assets.dart';
 import '../../data/services/app_settings_service.dart';
 import '../../data/services/error_log_service.dart';
 import '../../data/services/update_service.dart';
+import '../../widgets/tag_preference_dialog.dart';
 import '../player/player_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -336,6 +337,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               child: Column(
                 children: [
+                  // Preferensi Tema Drama (Untukmu & For You)
+                  _buildMenuItem(
+                    icon: Icons.auto_awesome_rounded,
+                    title: 'Preferensi Tema Drama',
+                    subtitle: settings.preferredTags.isEmpty
+                        ? 'Semua Tema (Default)'
+                        : '${settings.preferredTags.length} Tema Dipilih',
+                    onTap: () async {
+                      await TagPreferenceDialog.show(context);
+                      setState(() {});
+                    },
+                  ),
+                  const Divider(
+                    color: AppColors.divider,
+                    height: 1,
+                    indent: 52,
+                  ),
+
                   // Kualitas video — satu-satunya pengatur resolusi
                   // (pilih 480p bila ingin hemat kuota).
                   _buildMenuItem(
@@ -909,8 +928,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   '/Celosz-fle7/GODrama/issues/new',
                   {
                     'title': 'Masukan dari aplikasi GoDrama',
-                    'body':
-                        '$message\n\n---\nVersi aplikasi: $_versionLabel',
+                    'body': '$message\n\n---\nVersi aplikasi: $_versionLabel',
                   },
                 );
                 final launched = await launchUrl(

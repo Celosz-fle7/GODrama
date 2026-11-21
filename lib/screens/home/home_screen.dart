@@ -8,6 +8,7 @@ import '../../data/services/shorttv_service.dart';
 import '../../data/services/app_settings_service.dart';
 import '../../widgets/drama_card.dart';
 import '../../widgets/hero_banner.dart';
+import '../../widgets/tag_preference_dialog.dart';
 import '../player/player_screen.dart';
 import '../search/search_screen.dart';
 
@@ -19,7 +20,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  String _selectedCategoryId = 'sulih_suara';
+  String _selectedCategoryId = 'untukmu';
   List<DramaModel> _dramas = [];
   bool _isLoading = true;
   // Pagination: halaman 1 dulu, halaman berikut saat scroll mendekati bawah.
@@ -29,25 +30,15 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _hasMore = false;
   bool _isLoadingMore = false;
 
-  // Tab Beranda Berbasis Kategori Otentik Server MovieBox & Mesin Sulih Suara:
-  // 1. Sulih Suara 🎧: Konten pencarian "sulih suara" (ratusan drama sulih suara studio)
-  // 2. Dubbing 🗣️: Konten pencarian "dubbing" (ratusan drama dubbing studio terpisah)
-  // 3. Versi Dub 🎙️: Konten pencarian "versi dub" (ratusan drama versi dubbing alternatif)
-  // 4. Sedang Tren 🔥: Drama viral paling banyak ditonton (sort: 'Hottest')
-  // 5. Terbaru 🎉: Drama rilis paling baru (sort: 'Latest')
-  // 6. Lokal Indo 🇮🇩: Drama buatan kreator Indonesia & Vision+ (country: 'Indonesia')
-  // 7. Cerita Barat 🐺: Drama werewolf & barat ReelShort (country: 'United States')
-  // 8. Drama Asia 👑: Drama CEO & miliarder ShortMax/Asia (country: 'China')
-  // 9. Rating Top ⭐: Drama skor kepuasan tertinggi (sort: 'Rating')
+  // 4 Kategori Beranda Utama:
+  // 1. Untukmu 🎯: Kolam gabungan 3 kata kunci dubbing ('sulih suara', 'dubbing', 'versi dub') + dipersonalisasi sesuai tag preferensi user
+  // 2. Sedang Tren 🔥: Drama viral paling banyak ditonton (sort: 'Hottest')
+  // 3. Terbaru 🎉: Drama rilis paling baru (sort: 'Latest')
+  // 4. Rating Top ⭐: Drama skor kepuasan tertinggi (sort: 'Rating')
   final List<CategoryModel> _categories = const [
-    CategoryModel(id: 'sulih_suara', name: 'Sulih Suara 🎧'),
-    CategoryModel(id: 'dubbing', name: 'Dubbing 🗣️'),
-    CategoryModel(id: 'versi_dub', name: 'Versi Dub 🎙️'),
+    CategoryModel(id: 'untukmu', name: 'Untukmu 🎯'),
     CategoryModel(id: 'trending', name: 'Sedang Tren 🔥'),
     CategoryModel(id: 'terbaru', name: 'Terbaru 🎉'),
-    CategoryModel(id: 'lokal_indo', name: 'Lokal Indo 🇮🇩'),
-    CategoryModel(id: 'western', name: 'Cerita Barat 🐺'),
-    CategoryModel(id: 'asian', name: 'Drama Asia 👑'),
     CategoryModel(id: 'top_rating', name: 'Rating Top ⭐'),
   ];
 
@@ -56,6 +47,15 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _scrollController.addListener(_onScroll);
     _loadDramas();
+
+    // Tampilkan onboarding pemilih preferensi tag saat pertama kali buka aplikasi
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!AppSettingsService.instance.isOnboardingCompleted && mounted) {
+        TagPreferenceDialog.show(context, isFirstLaunch: true).then((_) {
+          if (mounted) _loadDramas(forceRefresh: true);
+        });
+      }
+    });
   }
 
   @override

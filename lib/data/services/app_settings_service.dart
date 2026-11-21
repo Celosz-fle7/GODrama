@@ -97,10 +97,33 @@ class AppSettingsService extends ChangeNotifier {
   // Skor preferensi tema/tag yang sering ditonton user (tag -> skor tontonan)
   final Map<String, int> _tagScores = {};
 
+  // Status onboarding preferensi tag pertama kali buka app
+  bool _onboardingCompleted = false;
+  final Set<String> _preferredTags = {};
+
+  // Tag populer resmi dari genre server MovieBox & industri drama pendek
+  static const List<Map<String, String>> availableThemeTags = [
+    {'id': 'CEO', 'label': 'CEO & Konglomerat', 'icon': '👑'},
+    {'id': 'Revenge', 'label': 'Balas Dendam', 'icon': '⚔️'},
+    {'id': 'Marriage', 'label': 'Pernikahan Kontrak', 'icon': '💍'},
+    {'id': 'Werewolf', 'label': 'Werewolf & Fantasi', 'icon': '🐺'},
+    {'id': 'Comeback', 'label': 'Dewa Perang / Comeback', 'icon': '🛡️'},
+    {'id': 'Billionaire', 'label': 'Miliarder', 'icon': '💰'},
+    {
+      'id': 'Toxic Relationship',
+      'label': 'Pengkhianatan / Toxic',
+      'icon': '💔',
+    },
+    {'id': 'True Love', 'label': 'Romantis / Cinta Sejati', 'icon': '❤️'},
+    {'id': 'Baby', 'label': 'Keluarga & Anak', 'icon': '👶'},
+  ];
+
   String get defaultQuality => _defaultQuality;
   bool get autoPlayNext => _autoPlayNext;
   String get userName => _userName;
   String get userId => _userId;
+  bool get isOnboardingCompleted => _onboardingCompleted;
+  Set<String> get preferredTags => Set.unmodifiable(_preferredTags);
   List<DramaModel> get watchHistory =>
       List.unmodifiable(_history.map((e) => e.drama));
   List<HistoryEntry> get historyEntries => List.unmodifiable(_history);
@@ -189,6 +212,12 @@ class AppSettingsService extends ChangeNotifier {
           });
         } catch (_) {}
       }
+
+      _onboardingCompleted = p.getBool('godrama_onboarding_completed') ?? false;
+      final savedPrefs = p.getStringList('godrama_preferred_tags');
+      if (savedPrefs != null && savedPrefs.isNotEmpty) {
+        _preferredTags.addAll(savedPrefs);
+      }
     } catch (e) {
       // Gagal baca storage bukan fatal: lanjut mode memori.
       debugPrint('[AppSettingsService] Gagal baca storage: $e');
@@ -259,6 +288,31 @@ class AppSettingsService extends ChangeNotifier {
     final entries = _tagScores.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
     return entries.take(limit).map((e) => e.key).toList();
+  }
+
+  /// Simpan preferensi tag pilihan pengguna (dari onboarding atau menu pengaturan)
+  Future<void> savePreferredTags(
+    Iterable<String> tags, {
+    bool markOnboarding = true,
+  }) async {
+    _preferredTags
+      ..clear()
+      ..addAll(tags);
+
+    if (markOnboarding) {
+      _onboardingCompleted = true;
+      await _prefs?.setBool('godrama_onboarding_completed', true);
+    }
+    await _prefs?.setStringList(
+      'godrama_preferred_tags',
+      _preferredTags.toList(),
+    );
+
+    // Berikan skor awal pada tag preferensi agar langsung mempengaruhi feed
+    if (_preferredTags.isNotEmpty) {
+      recordTagsWatched(_preferredTags.toList(), weight: 5);
+    }
+    notifyListeners();
   }
 
   /// Catat drama sebagai sudah pernah di-swipe / diintip di cuplikan feed For You.

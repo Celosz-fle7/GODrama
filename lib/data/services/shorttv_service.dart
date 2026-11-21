@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/drama_model.dart';
+import 'app_settings_service.dart';
 
 class ShortTvService {
   static ShortTvService? _instance;
@@ -408,14 +409,19 @@ class ShortTvService {
     return [];
   }
 
-  /// For You Feed per halaman (Short drama berbahasa Indonesia dengan dynamic sorting).
-  /// Paginasi kontinu tanpa batasan buatan.
+  /// For You Feed per halaman (Short drama berbahasa Indonesia dengan dynamic sorting & preferensi tag).
+  /// Mengambil konten acak dari kolam Untukmu (3 kata kunci dubbing server).
   Future<List<DramaModel>> fetchForYouPage(
     int page, {
     String sort = 'Hottest',
     int perPage = 10,
   }) async {
     if (page < 1) return [];
+    final pool = await fetchUntukmuDramas(page: page);
+    if (pool.isNotEmpty) {
+      pool.shuffle();
+      return pool;
+    }
     return await fetchShortTvCatalog(
       classify: 'Indonesian dub',
       sort: sort,
@@ -423,6 +429,80 @@ class ShortTvService {
       perPage: perPage,
       defaultProviderBadge: 'Sulih Suara',
     );
+  }
+
+  /// Kolam raksasa 3 kata kunci dubbing ('sulih suara', 'dubbing', 'versi dub')
+  /// digabung dan diprioritaskan berdasarkan tag preferensi user
+  Future<List<DramaModel>> fetchUntukmuDramas({
+    int page = 1,
+    bool forceRefresh = false,
+  }) async {
+    final List<DramaModel> pool = [];
+    if (page == 1) {
+      // Ambil serentak 3 kata kunci dubbing untuk halaman pertama
+      final results = await Future.wait([
+        searchShortTv(
+          'sulih suara',
+          page: 1,
+          perPage: 12,
+          defaultProviderBadge: 'Sulih Suara',
+        ),
+        searchShortTv(
+          'dubbing',
+          page: 1,
+          perPage: 12,
+          defaultProviderBadge: 'Dubbing',
+        ),
+        searchShortTv(
+          'versi dub',
+          page: 1,
+          perPage: 12,
+          defaultProviderBadge: 'Versi Dub',
+        ),
+      ]);
+      pool.addAll(results[0]);
+      pool.addAll(results[1]);
+      pool.addAll(results[2]);
+    } else {
+      // Paginasi kontinu: selang-seling keyword berdasarkan nomor halaman
+      final kwIndex = (page - 1) % 3;
+      final actualPage = ((page - 1) ~/ 3) + 1;
+      final kws = ['sulih suara', 'dubbing', 'versi dub'];
+      final badges = ['Sulih Suara', 'Dubbing', 'Versi Dub'];
+      final res = await searchShortTv(
+        kws[kwIndex],
+        page: actualPage + 1,
+        perPage: 20,
+        defaultProviderBadge: badges[kwIndex],
+      );
+      pool.addAll(res);
+    }
+
+    final uniqueDramas = _dedupe(pool);
+    final preferred = AppSettingsService.instance.preferredTags;
+
+    // Prioritaskan drama yang tag-nya cocok dengan preferensi user ke posisi atas
+    if (preferred.isNotEmpty) {
+      uniqueDramas.sort((a, b) {
+        final aMatches = a.tags.any(
+          (t) =>
+              preferred.any((p) => t.toLowerCase().contains(p.toLowerCase())),
+        );
+        final bMatches = b.tags.any(
+          (t) =>
+              preferred.any((p) => t.toLowerCase().contains(p.toLowerCase())),
+        );
+        if (aMatches && !bMatches) return -1;
+        if (!aMatches && bMatches) return 1;
+        return 0;
+      });
+    }
+
+    if (forceRefresh && uniqueDramas.isNotEmpty) {
+      uniqueDramas.shuffle();
+    }
+
+    return uniqueDramas;
   }
 
   List<DramaModel> _dedupe(List<DramaModel> input) {
@@ -501,14 +581,10 @@ class ShortTvService {
     if (page < 1) return [];
 
     switch (tab) {
-      case 'sulih_suara':
+      case 'untukmu':
       case 'untuk_anda':
-        return await searchShortTv(
-          'sulih suara',
-          page: page,
-          perPage: 20,
-          defaultProviderBadge: 'Sulih Suara',
-        );
+      case 'sulih_suara':
+        return await fetchUntukmuDramas(page: page, forceRefresh: forceRefresh);
       case 'dubbing':
         return await searchShortTv(
           'dubbing',
